@@ -19,7 +19,7 @@
 namespace rocksdb {
 namespace titandb {
 
-std::shared_ptr<Statistics> CreateDBStatistics();
+std::shared_ptr<Statistics> CreateDBStatistics1();
 
 enum class InternalOpStatsType : int {
   COUNT = 0,
@@ -209,6 +209,14 @@ inline uint64_t GetAndResetStats(InternalOpStats* stats,
   if (stats != nullptr) {
     return (*stats)[static_cast<int>(type)].exchange(0,
                                                      std::memory_order_relaxed);
+  }
+  return 0;
+}
+
+inline uint64_t GetStats(InternalOpStats* stats,
+                                 InternalOpStatsType type) {
+  if (stats != nullptr) {
+    return (*stats)[static_cast<int>(type)].load(std::memory_order_relaxed);
   }
   return 0;
 }

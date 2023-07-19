@@ -12,6 +12,9 @@ if (NOT ROCKSDB_GIT_BRANCH)
   set(ROCKSDB_GIT_BRANCH "6.29.tikv")
 endif()
 
+#set rocksdb dir
+set(ROCKSDB_DIR "/home/master/finch/src/rocksdb/")
+
 if (NOT DEFINED ROCKSDB_DIR)
   if (GIT_FOUND)
     if (WIN32)
@@ -35,6 +38,7 @@ include_directories(${ROCKSDB_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/src)
 include_directories(${PROJECT_SOURCE_DIR}/util)
+include_directories(${PROJECT_SOURCE_DIR}/my_tool)
 
 file(GLOB SOURCES src/*.cc)
 file(GLOB TEST_SOURCES src/*test.cc)
@@ -170,8 +174,8 @@ if (WITH_TITAN_TOOLS)
     # Hack: On Travis (with Ubuntu xenial or before), libgflags-dev package doesn't come with
     # gflags-config.cmake, so find_package will fail. Hard-code gflag path for now.
     if (NOT APPLE)
-      set(gflags_INCLUDE_DIR "/usr/include/gflags")
-      list(APPEND TOOLS_LIBS "/usr/lib/x86_64-linux-gnu/libgflags.a")
+      set(gflags_INCLUDE_DIR "/usr/local/include/gflags")
+      list(APPEND TOOLS_LIBS "/usr/local/lib/libgflags.a")
     endif()
   endif()
   add_definitions(-DGFLAGS)
@@ -191,6 +195,11 @@ if (WITH_TITAN_TOOLS)
   add_executable(titan_blob_file_dump tools/blob_file_dump.cc)
   target_include_directories(titan_blob_file_dump PRIVATE ${gflags_INCLUDE_DIR})
   target_link_libraries(titan_blob_file_dump ${TOOLS_LIBS})
+
+  add_executable(my_titanstats tools/my_titanstats.cc)
+  target_include_directories(my_titanstats PRIVATE ${gflags_INCLUDE_DIR})
+  target_link_libraries(my_titanstats ${TOOLS_LIBS})
+  
 endif()
 
 # Installation - copy lib/ and include/

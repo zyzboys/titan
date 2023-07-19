@@ -991,6 +991,7 @@ Status TitanDBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
     bs->ComputeGCScore();
 
     AddToGCQueue(cf_id);
+    TITAN_LOG_INFO(db_options_.info_log, "DeleteFilesInRanges(): begin to call MaybeScheduleGC()");
     MaybeScheduleGC();
   }
 
@@ -1409,6 +1410,10 @@ void TitanDBImpl::OnCompactionCompleted(
           // Mark last two level blob files to merge in next compaction if
           // discardable size reached GC threshold
           if (file->NoLiveData()) {
+            TITAN_LOG_INFO(db_options_.info_log,
+                         "OnCompactionCompleted[%d]: Blob file %" PRIu64
+                         " (level_merge) no live data.",
+                         compaction_job_info.job_id, file_number);
             RecordTick(statistics(stats_.get()), TITAN_GC_NUM_FILES, 1);
             RecordTick(statistics(stats_.get()), TITAN_GC_LEVEL_MERGE_DELETE,
                        1);
@@ -1418,6 +1423,10 @@ void TitanDBImpl::OnCompactionCompleted(
                          cf_options.num_levels - 2 &&
                      file->GetDiscardableRatio() >
                          cf_options.blob_file_discardable_ratio) {
+            TITAN_LOG_INFO(db_options_.info_log,
+                         "OnCompactionCompleted[%d]: Blob file %" PRIu64
+                         " (level_merge) reach discardable ratio, add tag.",
+                         compaction_job_info.job_id, file_number);
             RecordTick(statistics(stats_.get()), TITAN_GC_LEVEL_MERGE_MARK, 1);
             file->FileStateTransit(BlobFileMeta::FileEvent::kNeedMerge);
           } else if (count_sorted_run) {
@@ -1439,6 +1448,7 @@ void TitanDBImpl::OnCompactionCompleted(
     } else {
       bs->ComputeGCScore();
       AddToGCQueue(compaction_job_info.cf_id);
+      TITAN_LOG_INFO(db_options_.info_log, "OnCompactionCompleted(): begin to call MaybeScheduleGC()");
       MaybeScheduleGC();
     }
   }

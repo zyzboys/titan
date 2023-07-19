@@ -95,6 +95,7 @@ Status TitanDBImpl::InitializeGC(
     for (ColumnFamilyHandle* cf_handle : cf_handles) {
       AddToGCQueue(cf_handle->GetID());
     }
+    TITAN_LOG_INFO(db_options_.info_log, "InitializeGC(): begin to call MaybeScheduleGC()");
     MaybeScheduleGC();
   }
   return s;
@@ -106,6 +107,10 @@ void TitanDBImpl::MaybeScheduleGC() {
   if (db_options_.disable_background_gc) return;
 
   if (shuting_down_.load(std::memory_order_acquire)) return;
+
+  if (bg_gc_scheduled_ >= db_options_.max_background_gc) {
+    TITAN_LOG_INFO(db_options_.info_log, "gc thread busy, %d gc task is waiting", unscheduled_gc_);
+  }
 
   while (unscheduled_gc_ > 0 &&
          bg_gc_scheduled_ < db_options_.max_background_gc) {
@@ -145,6 +150,7 @@ void TitanDBImpl::BackgroundCallGC() {
 
     bg_gc_running_--;
     bg_gc_scheduled_--;
+    TITAN_LOG_INFO(db_options_.info_log, "after BackgroundGC(): begin to call MaybeScheduleGC()");
     MaybeScheduleGC();
     if (bg_gc_scheduled_ == 0 || bg_gc_running_ == 0) {
       // Signal DB destructor if bg_gc_scheduled_ drop to 0.

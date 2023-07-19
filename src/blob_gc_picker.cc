@@ -68,13 +68,18 @@ std::unique_ptr<BlobGC> BasicBlobGCPicker::PickBlobGC(
       }
     }
   }
-  TITAN_LOG_DEBUG(db_options_.info_log,
+  // TITAN_LOG_DEBUG(db_options_.info_log,
+  //                 "got batch size %" PRIu64 ", estimate output %" PRIu64
+  //                 " bytes",
+  //                 batch_size, estimate_output_size);
+  TITAN_LOG_INFO(db_options_.info_log,
                   "got batch size %" PRIu64 ", estimate output %" PRIu64
                   " bytes",
                   batch_size, estimate_output_size);
   if (blob_files.empty() ||
       (batch_size < cf_options_.min_gc_batch_size &&
        estimate_output_size < cf_options_.blob_file_target_size)) {
+    TITAN_LOG_INFO(db_options_.info_log, "no file need gc or gc size too small");
     return nullptr;
   }
   // if there is only one small file to merge, no need to perform

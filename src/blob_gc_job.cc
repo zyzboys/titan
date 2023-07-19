@@ -421,6 +421,7 @@ Status BlobGCJob::Finish() {
 }
 
 Status BlobGCJob::InstallOutputBlobFiles() {
+  TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputBlobFiles()");
   Status s;
   std::vector<
       std::pair<std::shared_ptr<BlobFileMeta>, std::unique_ptr<BlobFileHandle>>>
@@ -489,6 +490,7 @@ Status BlobGCJob::InstallOutputBlobFiles() {
 }
 
 Status BlobGCJob::RewriteValidKeyToLSM() {
+  TITAN_LOG_INFO(db_options_.info_log, "in RewriteValidKeyToLSM()");
   TitanStopWatch sw(env_, metrics_.gc_update_lsm_micros);
   Status s;
   auto* db_impl = reinterpret_cast<DBImpl*>(base_db_);

@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <iostream>
 
 #include "monitoring/statistics.h"
 #include "monitoring/statistics_impl.h"
@@ -14,7 +15,7 @@
 namespace rocksdb {
 namespace titandb {
 
-std::shared_ptr<Statistics> CreateDBStatistics() {
+std::shared_ptr<Statistics> CreateDBStatistics1() {
   return rocksdb::CreateDBStatistics<TITAN_TICKER_ENUM_MAX,
                                      TITAN_HISTOGRAM_ENUM_MAX>();
 }
@@ -177,27 +178,27 @@ void TitanInternalStats::DumpAndResetInternalOpStats(LogBuffer* log_buffer) {
         log_buffer,
         "%s %5d %10.1f %10.1f  %10.1f   %10.1f %8d %8d %10.1f %10.1f %10.1f",
         internal_op_names[op].c_str(),
-        GetAndResetStats(&internal_op_stats_[op], InternalOpStatsType::COUNT),
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op], InternalOpStatsType::COUNT),
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::BYTES_READ) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::BYTES_WRITTEN) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::IO_BYTES_READ) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::IO_BYTES_WRITTEN) /
             GB,
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::INPUT_FILE_NUM),
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::OUTPUT_FILE_NUM),
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::GC_READ_LSM_MICROS) /
             SECOND,
-        GetAndResetStats(&internal_op_stats_[op],
+        GetStats(&internal_op_stats_[op],
                          InternalOpStatsType::GC_UPDATE_LSM_MICROS) /
             SECOND);
   }

@@ -5,7 +5,7 @@
 namespace rocksdb {
 namespace titandb {
 
-std::shared_ptr<Statistics> CreateDBStatistics();
+std::shared_ptr<Statistics> CreateDBStatistics1();
 
 enum TickerType : uint32_t {
   TITAN_NUM_GET = TICKER_ENUM_MAX,
@@ -84,6 +84,8 @@ const std::vector<std::pair<TickerType, std::string>> TitanTickersNameMap = {
     {TITAN_BLOB_CACHE_MISS, "titandb.blob.cache.miss"},
     {TITAN_GC_DISCARDABLE, "titandb.gc.discardable"},
     {TITAN_GC_SMALL_FILE, "titandb.gc.small.file"},
+    {TITAN_GC_LEVEL_MERGE_MARK, "titandb.gc.level.merge.mark"},
+    {TITAN_GC_LEVEL_MERGE_DELETE, "titandb.gc.level.merge.delete"},
     {TITAN_GC_NO_NEED, "titandb.gc.no.need"},
     {TITAN_GC_REMAIN, "titandb.gc.remain"},
     {TITAN_GC_FAILURE, "titandb.gc.failure"},

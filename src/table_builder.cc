@@ -170,7 +170,7 @@ void TitanTableBuilder::AddBlob(const ParsedInternalKey& ikey,
   RecordInHistogram(statistics(stats_), TITAN_VALUE_SIZE, record.value.size());
   AddStats(stats_, cf_id_, TitanInternalStats::LIVE_BLOB_SIZE,
            record.value.size());
-  bytes_written_ += record.key.size() + record.value.size();
+  //bytes_written_ += record.key.size() + record.value.size();
 
   std::unique_ptr<BlobFileBuilder::BlobRecordContext> ctx(
       new BlobFileBuilder::BlobRecordContext);

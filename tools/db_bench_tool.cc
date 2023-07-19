@@ -32,6 +32,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <fstream>
 
 #include "db/db_impl/db_impl.h"
 #include "db/malloc_stats.h"
@@ -72,6 +73,7 @@
 #include "util/stderr_logger.h"
 #include "util/string_util.h"
 #include "util/xxhash.h"
+#include "util/zipf.h"
 #include "utilities/blob_db/blob_db.h"
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/bytesxor.h"
@@ -82,6 +84,7 @@
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
+
 
 DEFINE_string(
     benchmarks,
@@ -591,6 +594,10 @@ DEFINE_bool(use_fsync, false, "If true, issue fsync instead of fdatasync");
 
 DEFINE_bool(disable_wal, false, "If true, do not write WAL for write.");
 
+DEFINE_bool(zipfian, false, "Have a zipfian distribution or not.");
+
+DEFINE_double(zipfian_const, 0.99, "Zipfian const when have a zipfian distribution.");
+
 DEFINE_string(wal_dir, "", "If not empty, use the given dir for WAL");
 
 DEFINE_string(truth_db, "/dev/shm/truth_db/dbbench",
@@ -757,6 +764,11 @@ DEFINE_uint64(blob_db_min_blob_size, 0,
               "Smallest blob to store in a file. Blobs smaller than this "
               "will be inlined with the key in the LSM tree.");
 
+DEFINE_uint64(blob_db_bytes_per_sync, 0, "Bytes to sync blob file at.");
+
+DEFINE_uint64(blob_db_file_size, 256 * 1024 * 1024,
+              "Target size of each blob file.");
+              
 // Titan Options
 DEFINE_bool(use_titan, true, "Open a Titan instance.");
 
@@ -768,6 +780,21 @@ DEFINE_uint64(titan_min_blob_size, 0,
               "Smallest blob to store in a file. Blobs smaller than this "
               "will be inlined with the key in the LSM tree.");
 
+DEFINE_uint64(titan_blob_file_target_size, 256 * 1024 * 1024, 
+              "The desirable blob file size. This is not a hard limit but a wish.");
+
+DEFINE_double(titan_blob_file_discardable_ratio, 0.5,
+              "The ratio of how much discardable size of a blob file can be GC.");
+
+DEFINE_uint64(titan_merge_small_file_threshold, 8 * 1024 * 1024,
+              "The blob file size less than this option will be mark GC.");
+
+DEFINE_uint64(titan_min_gc_batch_size, 512 * 1024 * 1024,
+              "Min batch size for GC");
+
+DEFINE_uint64(titan_max_gc_batch_size, 1024 * 1024 * 1024,
+              "Max batch size for GC");
+
 DEFINE_bool(titan_disable_background_gc,
             rocksdb::titandb::TitanOptions().disable_background_gc,
             "Disable Titan background GC");
@@ -778,11 +805,6 @@ DEFINE_int32(titan_max_background_gc,
 
 DEFINE_int64(titan_blob_cache_size, 0,
              "Size of Titan blob cache. Disabled by default.");
-
-DEFINE_uint64(blob_db_bytes_per_sync, 0, "Bytes to sync blob file at.");
-
-DEFINE_uint64(blob_db_file_size, 256 * 1024 * 1024,
-              "Target size of each blob file.");
 
 // Secondary DB instance Options
 DEFINE_bool(use_secondary_db, false,
@@ -1567,6 +1589,8 @@ class ReporterAgent {
                 uint64_t report_interval_secs)
       : env_(env),
         total_ops_done_(0),
+        blob_space_amp_(0),
+        key_indb_(0),
         last_report_(0),
         report_interval_secs_(report_interval_secs),
         stop_(false) {
@@ -1600,10 +1624,33 @@ class ReporterAgent {
     total_ops_done_.fetch_add(num_ops);
   }
 
+  void ReportSpaceAmp(std::string blob_space_amp) {
+    blob_space_amp_ = stof(blob_space_amp);
+  }
+
+  void ReportKeyIndb(int64_t num) { key_indb_ = num; }
+
+  int64_t get_db_space() {
+    FILE* fp;
+    int64_t ret;
+    std::string cmd = "du -s " + FLAGS_db;
+    const char* sysCommand = cmd.data();
+
+    if ((fp = popen(sysCommand, "r")) == NULL) {
+      std::cout << "fail" << std::endl;
+      return 0;
+    }
+
+    fscanf(fp, "%ld", &ret);
+    pclose(fp);
+    return ret;
+  }
+
  private:
-  std::string Header() const { return "secs_elapsed,interval_qps"; }
+  std::string Header() const { return "secs_elapsed,interval_qps,logical_space,actual_space,space_amp"; }
   void SleepAndReport() {
     auto time_started = env_->NowMicros();
+    std::string report;
     while (true) {
       {
         std::unique_lock<std::mutex> lk(mutex_);
@@ -1620,9 +1667,24 @@ class ReporterAgent {
       auto secs_elapsed =
           (env_->NowMicros() - time_started + kMicrosInSecond / 2) /
           kMicrosInSecond;
-      std::string report = ToString(secs_elapsed) + "," +
-                           ToString(total_ops_done_snapshot - last_report_) +
-                           "\n";
+      
+      if (key_indb_ != 0) {
+        int64_t space_byte = get_db_space() * 1024;
+        int64_t kv_byte = key_indb_ * (FLAGS_key_size + FLAGS_value_size);
+        float space_amp = 1.0 * space_byte / kv_byte;
+        report = ToString(secs_elapsed) + "," +
+                 ToString(total_ops_done_snapshot - last_report_) + "," +
+                 ToString(kv_byte) + "," + ToString(space_byte) + "," +
+                 ToString(space_amp) + "\n";
+      } else {
+        report = ToString(secs_elapsed) + "," +
+                 ToString(total_ops_done_snapshot - last_report_) +
+                 ",NULL,NULL,NULL" + "\n";
+      }
+
+      // std::string report = ToString(secs_elapsed) + "," +
+      //                      ToString(total_ops_done_snapshot - last_report_) +
+      //                      "\n";
       auto s = report_file_->Append(report);
       if (s.ok()) {
         s = report_file_->Flush();
@@ -1640,6 +1702,8 @@ class ReporterAgent {
   Env* env_;
   std::unique_ptr<WritableFile> report_file_;
   std::atomic<int64_t> total_ops_done_;
+  float blob_space_amp_;
+  int64_t key_indb_;
   int64_t last_report_;
   const uint64_t report_interval_secs_;
   rocksdb::port::Thread reporting_thread_;
@@ -1909,6 +1973,12 @@ class Stats {
     }
   }
 
+  void FinishKeyIndb(int64_t key_num) {
+    if (reporter_agent_) {
+      reporter_agent_->ReportKeyIndb(key_num);
+    }
+  }
+
   void AddBytes(int64_t n) { bytes_ += n; }
 
   void Report(const Slice& name) {
@@ -2056,6 +2126,8 @@ struct SharedState {
   long num_initialized;
   long num_done;
   bool start;
+
+  std::set<std::string> key_indb;
 
   SharedState() : cv(&mu), perf_level(FLAGS_perf_level) {}
 };
@@ -3066,6 +3138,7 @@ class Benchmark {
 
     if (FLAGS_statistics) {
       fprintf(stdout, "STATISTICS:\n%s\n", dbstats->ToString().c_str());
+      // fprintf(stdout, "TITAN STATISTICS:\n%s\n", ToStringTitan().c_str());
     }
     if (FLAGS_simcache_size >= 0) {
       fprintf(stdout, "SIMULATOR CACHE STATISTICS:\n%s\n",
@@ -3133,6 +3206,14 @@ class Benchmark {
     shared.num_initialized = 0;
     shared.num_done = 0;
     shared.start = false;
+    if (FLAGS_use_existing_db > 0 && (method == &Benchmark::UpdateRandom || method == &Benchmark::WriteRandom)) {
+      std::string key_indb_file = FLAGS_db + "_key_indb";
+      std::ifstream file(key_indb_file);
+      for (std::string line; std::getline(file, line);) {
+        shared.key_indb.insert(line);
+      }
+      file.close();
+    }
     if (FLAGS_benchmark_write_rate_limit > 0) {
       shared.write_rate_limiter.reset(
           NewGenericRateLimiter(FLAGS_benchmark_write_rate_limit));
@@ -3792,9 +3873,14 @@ class Benchmark {
     opts->min_blob_size = FLAGS_titan_min_blob_size;
     opts->level_merge = FLAGS_titan_level_merge;
     opts->range_merge = FLAGS_titan_range_merge;
+    opts->blob_file_target_size = FLAGS_titan_blob_file_target_size;
+    opts->blob_file_discardable_ratio = FLAGS_titan_blob_file_discardable_ratio;
+    opts->merge_small_file_threshold = FLAGS_titan_merge_small_file_threshold;
+    opts->min_gc_batch_size = FLAGS_titan_min_gc_batch_size;
+    opts->min_gc_batch_size = FLAGS_titan_min_gc_batch_size;
     opts->disable_background_gc = FLAGS_titan_disable_background_gc;
     opts->max_background_gc = FLAGS_titan_max_background_gc;
-    opts->min_gc_batch_size = 128 << 20;
+    //opts->min_gc_batch_size = 128 << 20;
     opts->blob_file_compression = FLAGS_compression_type_e;
     if (FLAGS_titan_blob_cache_size > 0) {
       opts->blob_cache = NewLRUCache(FLAGS_titan_blob_cache_size);
@@ -4102,6 +4188,9 @@ class Benchmark {
     }
 
     Duration duration(test_duration, max_ops, ops_per_stage);
+    if (FLAGS_zipfian) {
+      init_zipf_generator(FLAGS_zipfian_const, 0, FLAGS_num);
+    }
     for (size_t i = 0; i < num_key_gens; i++) {
       key_gens[i].reset(new KeyGenerator(&(thread->rand), write_mode,
                                          num_ + max_num_range_tombstones_,
@@ -4161,9 +4250,16 @@ class Benchmark {
         // once per write.
         thread->stats.ResetLastOpTime();
       }
-
       for (int64_t j = 0; j < entries_per_batch_; j++) {
-        int64_t rand_num = key_gens[id]->Next();
+        int64_t rand_num;
+        if (FLAGS_zipfian) {
+          rand_num = nextValue() % FLAGS_num;
+          Random64 rand_local(rand_num);
+          rand_num = rand_local.Next() % FLAGS_num;
+        } else {
+          rand_num = key_gens[id]->Next();
+        }
+        //int64_t rand_num = key_gens[id]->Next();
         GenerateKeyFromInt(rand_num, FLAGS_num, &key);
         if (use_blob_db_) {
 #ifndef ROCKSDB_LITE
@@ -4232,6 +4328,8 @@ class Benchmark {
       if (!use_blob_db_) {
         s = db_with_cfh->db->Write(write_options_, &batch);
       }
+      thread->shared->key_indb.insert(key.ToString());
+      thread->stats.FinishKeyIndb(thread->shared->key_indb.size());
       thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
                                 entries_per_batch_, kWrite);
       if (FLAGS_sine_write_rate) {
@@ -4264,6 +4362,13 @@ class Benchmark {
         exit(1);
       }
     }
+    std::string key_indb_file = FLAGS_db + "_key_indb";
+    std::ofstream file(key_indb_file);
+    for (auto iter = thread->shared->key_indb.begin();
+         iter != thread->shared->key_indb.end(); iter++) {
+      file << *iter << std::endl;
+    }
+    file.close();
     thread->stats.AddBytes(bytes);
   }
 
@@ -4728,7 +4833,7 @@ class Benchmark {
     int64_t found = 0;
     int64_t bytes = 0;
     int num_keys = 0;
-    int64_t key_rand = GetRandomKey(&thread->rand);
+    int64_t key_rand = 0;
     ReadOptions options(FLAGS_verify_checksum, true);
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
@@ -4740,7 +4845,6 @@ class Benchmark {
       // We use same key_rand as seed for key and column family so that we can
       // deterministically find the cfh corresponding to a particular key, as it
       // is done in DoWrite method.
-      GenerateKeyFromInt(key_rand, FLAGS_num, &key);
       if (entries_per_batch_ > 1 && FLAGS_multiread_stride) {
         if (++num_keys == entries_per_batch_) {
           num_keys = 0;
@@ -4755,6 +4859,7 @@ class Benchmark {
       } else {
         key_rand = GetRandomKey(&thread->rand);
       }
+      GenerateKeyFromInt(key_rand, FLAGS_num, &key);
       read++;
       Status s;
       if (FLAGS_num_column_families > 1) {
@@ -5682,8 +5787,17 @@ class Benchmark {
         exit(1);
       }
       bytes += key.size() + value_size_;
+      thread->shared->key_indb.insert(key.ToString());
+      thread->stats.FinishKeyIndb(thread->shared->key_indb.size());
       thread->stats.FinishedOps(nullptr, db, 1, kUpdate);
     }
+    std::string key_indb_file = FLAGS_db + "_key_indb";
+    std::ofstream file(key_indb_file);
+    for (auto iter = thread->shared->key_indb.begin();
+         iter != thread->shared->key_indb.end(); iter++) {
+      file << *iter << std::endl;
+    }
+    file.close();
     char msg[100];
     snprintf(msg, sizeof(msg), "( updates:%" PRIu64 " found:%" PRIu64 ")",
              readwrites_, found);
@@ -6408,7 +6522,7 @@ int db_bench_tool(int argc, char** argv) {
   }
 #endif  // ROCKSDB_LITE
   if (FLAGS_statistics) {
-    dbstats = rocksdb::CreateDBStatistics();
+    dbstats = rocksdb::CreateDBStatistics<209,67>();
   }
   if (dbstats) {
     dbstats->set_stats_level(static_cast<StatsLevel>(FLAGS_stats_level));
