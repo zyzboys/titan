@@ -43,6 +43,7 @@ class BlobFileIterator {
     blob_index.file_number = file_number_;
     blob_index.blob_handle.offset = cur_record_offset_;
     blob_index.blob_handle.size = cur_record_size_;
+    blob_index.blob_handle.order = cur_record_order_;
     return blob_index;
   }
 
@@ -64,11 +65,13 @@ class BlobFileIterator {
   BlobDecoder decoder_;
 
   uint64_t iterate_offset_{0};
+  uint64_t iterate_order_{0};
   std::vector<char> buffer_;
   OwnedSlice uncompressed_;
   BlobRecord cur_blob_record_;
   uint64_t cur_record_offset_;
   uint64_t cur_record_size_;
+  uint64_t cur_record_order_;
   uint64_t header_size_;
 
   uint64_t readahead_begin_offset_{0};

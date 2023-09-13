@@ -116,6 +116,26 @@ void TitanTableBuilder::Add(const Slice& key, const Slice& value) {
   }
 }
 
+void TitanTableBuilder::RecordDrop(const Slice& value, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
+  if (!ok()) return;
+
+  if (drop_keys == NULL) {
+    TITAN_LOG_INFO(db_options_.info_log, "no need to drop");
+    return;
+  }
+
+  // record dorp key in bitmap
+  BlobIndex index;
+  Slice copy = value;
+  status_ = index.DecodeFrom(&copy);
+  if (!ok()) {
+    return;
+  }
+  // record drop keys in set
+  (*drop_keys)[index.file_number].insert(index.blob_handle.order);
+  return;
+}
+
 void TitanTableBuilder::AddBase(const Slice& key,
                                 const ParsedInternalKey& parsedKey,
                                 const Slice& value) {
@@ -242,6 +262,7 @@ void TitanTableBuilder::FinishBlobFile() {
           blob_builder_->NumEntries(), target_level_,
           blob_builder_->GetSmallestKey(), blob_builder_->GetLargestKey());
       file->FileStateTransit(BlobFileMeta::FileEvent::kFlushOrCompactionOutput);
+      file->InitLiveDataBitset(blob_builder_->NumEntries());
       finished_blobs_.push_back({file, std::move(blob_handle_)});
       // level merge is performed
       if (gc_num_keys_relocated_ != 0) {

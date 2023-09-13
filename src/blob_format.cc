@@ -96,17 +96,19 @@ Status BlobDecoder::DecodeRecord(Slice* src, BlobRecord* record,
 void BlobHandle::EncodeTo(std::string* dst) const {
   PutVarint64(dst, offset);
   PutVarint64(dst, size);
+  PutVarint64(dst, order);
 }
 
 Status BlobHandle::DecodeFrom(Slice* src) {
-  if (!GetVarint64(src, &offset) || !GetVarint64(src, &size)) {
+  if (!GetVarint64(src, &offset) || !GetVarint64(src, &size) || !GetVarint64(src, &order)) {
     return Status::Corruption("BlobHandle");
   }
   return Status::OK();
 }
 
 bool operator==(const BlobHandle& lhs, const BlobHandle& rhs) {
-  return lhs.offset == rhs.offset && lhs.size == rhs.size;
+  return lhs.offset == rhs.offset && lhs.size == rhs.size &&
+         lhs.order == rhs.order;
 }
 
 void BlobIndex::EncodeTo(std::string* dst) const {

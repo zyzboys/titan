@@ -1,5 +1,8 @@
 #pragma once
 
+#include <bitset>
+#include <boost/dynamic_bitset.hpp>
+
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
@@ -132,15 +135,16 @@ class BlobDecoder {
 
 // Format of blob handle (not fixed size):
 //
-//    +----------+----------+
-//    |  offset  |   size   |
-//    +----------+----------+
-//    | Varint64 | Varint64 |
-//    +----------+----------+
+//    +----------+----------+----------+
+//    |  offset  |   size   |   order  |
+//    +----------+----------+----------+
+//    | Varint64 | Varint64 | Varint64 |
+//    +----------+----------+----------+
 //
 struct BlobHandle {
   uint64_t offset{0};
   uint64_t size{0};
+  uint64_t order{0};  //start from 0
 
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(Slice* src);
@@ -150,11 +154,11 @@ struct BlobHandle {
 
 // Format of blob index (not fixed size):
 //
-//    +------+-------------+------------------------------------+
-//    | type | file number |            blob handle             |
-//    +------+-------------+------------------------------------+
-//    | char |  Varint64   | Varint64(offsest) + Varint64(size) |
-//    +------+-------------+------------------------------------+
+//    +------+-------------+-----------------------------------------------------+
+//    | type | file number |                    blob handle                      |
+//    +------+-------------+-----------------------------------------------------+
+//    | char |  Varint64   | Varint64(offsest) + Varint64(size) + Varint64(order)|
+//    +------+-------------+-----------------------------------------------------+
 //
 // It is stored in LSM-Tree as the value of key, then Titan can use this blob
 // index to locate actual value from blob file.
@@ -253,6 +257,24 @@ class BlobFileMeta {
   bool is_obsolete() const { return state_ == FileState::kObsolete; }
 
   void FileStateTransit(const FileEvent& event);
+
+  // bitset operation
+  void InitLiveDataBitset(uint64_t size) {
+    live_data_bitset_.resize(size, true);
+  }
+  void SetLiveDataBitset(uint64_t offset, bool val) {
+    live_data_bitset_.set(offset, val);
+  }
+  bool IsLiveData(uint64_t offset) {
+    return live_data_bitset_.test(offset); 
+  }
+  uint64_t GetLiveDataBitsetSize() {
+    return live_data_bitset_.size();
+  }
+  boost::dynamic_bitset<> *GetLiveDataBitset() {
+    return &live_data_bitset_;
+  }
+
   bool UpdateLiveDataSize(int64_t delta) {
     int64_t result = static_cast<int64_t>(live_data_size_) + delta;
     if (result < 0) {
@@ -286,6 +308,9 @@ class BlobFileMeta {
   // and can only happen when the file is from legacy version.
   std::string smallest_key_;
   std::string largest_key_;
+
+  // add bitset to record which blob is live
+  boost::dynamic_bitset<> live_data_bitset_;
 
   // Not persistent field
 

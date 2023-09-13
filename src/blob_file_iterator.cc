@@ -108,6 +108,7 @@ void BlobFileIterator::IterateForPrev(uint64_t offset) {
   uint64_t total_length = 0;
   FixedSlice<kRecordHeaderSize> header_buffer;
   iterate_offset_ = header_size_;
+  iterate_order_ = 0;
   for (; iterate_offset_ < offset; iterate_offset_ += total_length) {
     // With for_compaction=true, rate_limiter is enabled. Since
     // BlobFileIterator is only used for GC, we always set for_compaction to
@@ -119,9 +120,13 @@ void BlobFileIterator::IterateForPrev(uint64_t offset) {
     status_ = decoder_.DecodeHeader(&header_buffer);
     if (!status_.ok()) return;
     total_length = kRecordHeaderSize + decoder_.GetRecordSize();
+    iterate_order_++;
   }
 
-  if (iterate_offset_ > offset) iterate_offset_ -= total_length;
+  if (iterate_offset_ > offset) {  
+    iterate_order_--;
+    iterate_offset_ -= total_length;
+  } 
   valid_ = false;
 }
 
@@ -151,8 +156,10 @@ void BlobFileIterator::GetBlobRecord() {
   if (!status_.ok()) return;
 
   cur_record_offset_ = iterate_offset_;
+  cur_record_order_ = iterate_order_;
   cur_record_size_ = kRecordHeaderSize + record_size;
   iterate_offset_ += cur_record_size_;
+  iterate_order_++;
   valid_ = true;
 }
 

@@ -168,7 +168,7 @@ void TitanInternalStats::DumpAndResetInternalOpStats(LogBuffer* log_buffer) {
   constexpr double SECOND = 1.0 * 1000000;
   LogToBuffer(log_buffer,
               "OP           COUNT READ(GB)  WRITE(GB) IO_READ(GB) IO_WRITE(GB) "
-              " FILE_IN FILE_OUT GC_READ(MICROS) GC_UPDATE(MICROS)");
+              " FILE_IN FILE_OUT GC_READ(S) GC_UPDATE(S)");
   LogToBuffer(log_buffer,
               "----------------------------------------------------------------"
               "-----------------");

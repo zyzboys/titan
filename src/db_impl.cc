@@ -1184,6 +1184,7 @@ void TitanDBImpl::OnFlushCompleted(const FlushJobInfo& flush_job_info) {
     return;
   }
   std::map<uint64_t, int64_t> blob_file_size_diff;
+  std::map<uint64_t, std::set<uint64_t>> drop_keys = flush_job_info.drop_keys;
   Status s = ExtractGCStatsFromTableProperty(
       flush_job_info.table_properties, true /*to_add*/, &blob_file_size_diff);
   if (!s.ok()) {
@@ -1206,6 +1207,16 @@ void TitanDBImpl::OnFlushCompleted(const FlushJobInfo& flush_job_info) {
                       flush_job_info.job_id, flush_job_info.cf_id);
       assert(false);
       return;
+    }
+    for (auto drop_key : drop_keys) {
+      uint64_t file_number = drop_key.first;
+      for (auto order : drop_key.second) {
+        std::shared_ptr<BlobFileMeta> file = blob_storage->FindFile(file_number).lock();
+        if (file == nullptr) {
+          continue;
+        }
+        file->SetLiveDataBitset(order, false);
+      }
     }
     for (const auto& file_diff : blob_file_size_diff) {
       uint64_t file_number = file_diff.first;
@@ -1263,6 +1274,7 @@ void TitanDBImpl::OnFlushCompleted(const FlushJobInfo& flush_job_info) {
 void TitanDBImpl::OnCompactionCompleted(
     const CompactionJobInfo& compaction_job_info) {
   TEST_SYNC_POINT("TitanDBImpl::OnCompactionCompleted:Begin");
+  // peiqi
   if (!initialized()) {
     assert(false);
     return;
@@ -1272,6 +1284,7 @@ void TitanDBImpl::OnCompactionCompleted(
     return;
   }
   std::map<uint64_t, int64_t> blob_file_size_diff;
+  std::map<uint64_t, std::set<uint64_t>> drop_keys = *(compaction_job_info.stats.drop_keys);
   const TablePropertiesCollection& prop_collection =
       compaction_job_info.table_properties;
   auto update_diff = [&](const std::vector<std::string>& files, bool to_add) {
@@ -1319,6 +1332,18 @@ void TitanDBImpl::OnCompactionCompleted(
     bool count_sorted_run =
         cf_options.level_merge && cf_options.range_merge &&
         cf_options.num_levels - 1 == compaction_job_info.output_level;
+
+    for (auto drop_key : drop_keys) {
+      uint64_t file_number = drop_key.first;
+      for (auto order : drop_key.second) {
+        std::shared_ptr<BlobFileMeta> file = bs->FindFile(file_number).lock();
+        if (file == nullptr || file->is_obsolete()) {
+        // File has been GC out.
+        continue;
+      }
+        file->SetLiveDataBitset(order, false);
+      }
+    }
 
     for (const auto& file_diff : blob_file_size_diff) {
       uint64_t file_number = file_diff.first;

@@ -198,7 +198,9 @@ Status BlobGCJob::DoRunGC() {
     }
 
     bool discardable = false;
-    s = DiscardEntry(gc_iter->key(), blob_index, &discardable);
+    // use bitset to check if blob is live
+    s = DiscardEntryWithBitset(blob_index, &discardable);
+    // s = DiscardEntry(gc_iter->key(), blob_index, &discardable);
     if (!s.ok()) {
       break;
     }
@@ -349,6 +351,31 @@ Status BlobGCJob::BuildIterator(
   return s;
 }
 
+Status BlobGCJob::DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable) {
+  TitanStopWatch sw(env_, metrics_.gc_read_lsm_micros);
+  assert(discardable != nullptr);
+  std::shared_ptr<BlobFileMeta> file;
+  // find blob file meta
+  for (const auto& f : blob_gc_->inputs()) {
+    if (f->file_number() == blob_index.file_number) {
+      file = f;
+      break;
+    }
+  }
+  // can't find blob file meta
+  if (!file) {
+    return Status::NotFound("Blob file meta not found");
+  }
+  // check bitset
+  if (file->IsLiveData(blob_index.blob_handle.order)) {
+    *discardable = false;
+  } else {
+    *discardable = true;
+  }
+
+  return Status::OK();
+}
+
 Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
                                bool* discardable) {
   TitanStopWatch sw(env_, metrics_.gc_read_lsm_micros);
@@ -392,6 +419,7 @@ Status BlobGCJob::Finish() {
     s = InstallOutputBlobFiles();
     if (s.ok()) {
       TEST_SYNC_POINT("BlobGCJob::Finish::BeforeRewriteValidKeyToLSM");
+      // peiqi: critical path
       s = RewriteValidKeyToLSM();
       if (!s.ok()) {
         TITAN_LOG_ERROR(db_options_.info_log,
@@ -437,9 +465,10 @@ Status BlobGCJob::InstallOutputBlobFiles() {
     metrics_.gc_num_new_files++;
 
     auto file = std::make_shared<BlobFileMeta>(
-        builder.first->GetNumber(), builder.first->GetFile()->GetFileSize(), 0,
+        builder.first->GetNumber(), builder.first->GetFile()->GetFileSize(), builder.second->NumEntries(),
         0, builder.second->GetSmallestKey(), builder.second->GetLargestKey());
     file->set_live_data_size(builder.second->live_data_size());
+    file->InitLiveDataBitset(builder.second->NumEntries());
     file->FileStateTransit(BlobFileMeta::FileEvent::kGCOutput);
     RecordInHistogram(statistics(stats_), TITAN_GC_OUTPUT_FILE_SIZE,
                       file->file_size());
@@ -499,7 +528,7 @@ Status BlobGCJob::RewriteValidKeyToLSM() {
   wo.low_pri = true;
   wo.ignore_missing_column_families = true;
 
-  std::unordered_map<uint64_t, uint64_t>
+  std::unordered_map<uint64_t, std::pair<uint64_t, std::set<uint64_t>>>
       dropped;  // blob_file_number -> dropped_size
   for (auto& write_batch : rewrite_batches_) {
     if (blob_gc_->GetColumnFamilyData()->IsDropped()) {
@@ -531,7 +560,8 @@ Status BlobGCJob::RewriteValidKeyToLSM() {
       // Though record is dropped, the diff won't counted in discardable
       // ratio,
       // so we should update the live_data_size here.
-      dropped[new_blob_index.file_number] += new_blob_index.blob_handle.size;
+      dropped[new_blob_index.file_number].first += new_blob_index.blob_handle.size;
+      dropped[new_blob_index.file_number].second.insert(new_blob_index.blob_handle.order);
     } else {
       // We hit an error.
       break;
@@ -555,8 +585,11 @@ Status BlobGCJob::RewriteValidKeyToLSM() {
                         blob_file.first);
         continue;
       }
+      for (auto order : blob_file.second.second) {
+        file->SetLiveDataBitset(order, false);
+      }
       SubStats(stats_, cf_id, file->GetDiscardableRatioLevel(), 1);
-      file->UpdateLiveDataSize(-blob_file.second);
+      file->UpdateLiveDataSize(-blob_file.second.first);
       AddStats(stats_, cf_id, file->GetDiscardableRatioLevel(), 1);
 
       blob_storage->ComputeGCScore();

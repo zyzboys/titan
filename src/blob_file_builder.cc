@@ -142,6 +142,7 @@ void BlobFileBuilder::FlushSampleRecords(OutContexts* out_ctx) {
 void BlobFileBuilder::WriteEncoderData(BlobHandle* handle) {
   handle->offset = file_->GetFileSize();
   handle->size = encoder_.GetEncodedSize();
+  handle->order = num_entries_;
   live_data_size_ += handle->size;
 
   status_ = file_->Append(encoder_.GetHeader());

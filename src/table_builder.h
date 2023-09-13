@@ -32,6 +32,8 @@ class TitanTableBuilder : public TableBuilder {
 
   void Add(const Slice& key, const Slice& value) override;
 
+  void RecordDrop(const Slice& value, std::map<uint64_t, std::set<uint64_t>>* drop_keys) override;
+
   Status status() const override;
 
   Status Finish() override;

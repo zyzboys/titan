@@ -216,7 +216,7 @@ class TitanDBImpl : public TitanDB {
   Status ExtractGCStatsFromTableProperty(
       const TableProperties& table_properties, bool to_add,
       std::map<uint64_t, int64_t>* blob_file_size_diff);
-
+    
   // REQUIRE: mutex_ held
   void AddToGCQueue(uint32_t column_family_id) {
     mutex_.AssertHeld();
