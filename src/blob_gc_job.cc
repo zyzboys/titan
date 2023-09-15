@@ -134,12 +134,21 @@ Status BlobGCJob::Prepare() {
 
 Status BlobGCJob::Run() {
   std::string tmp;
+  uint64_t total_size = 0;
+  uint64_t total_live_data_size = 0;
   for (const auto& f : blob_gc_->inputs()) {
     if (!tmp.empty()) {
       tmp.append(" ");
     }
     tmp.append(std::to_string(f->file_number()));
+    total_size += f->file_size();
+    total_live_data_size += f->live_data_size();
   }
+  TITAN_LOG_INFO(db_options_.info_log,
+                 "[%s] Titan GC job start with %" PRIu64
+                 " files, %" PRIu64 " bytes, %" PRIu64 " live bytes, %" PRIu64 " garbage bytes",
+                 blob_gc_->column_family_handle()->GetName().c_str(),
+                 blob_gc_->inputs().size(), total_size, total_live_data_size, total_size - total_live_data_size);
   TITAN_LOG_BUFFER(log_buffer_, "[%s] Titan GC candidates[%s]",
                    blob_gc_->column_family_handle()->GetName().c_str(),
                    tmp.c_str());
@@ -171,12 +180,16 @@ Status BlobGCJob::DoRunGC() {
   //  uint64_t total_entry_size = 0;
 
   uint64_t file_size = 0;
+  uint64_t discardable_count = 0;
+  uint64_t total_count = 0;
+  uint64_t valid_count = 0;
 
   std::string last_key;
   bool last_key_is_fresh = false;
   gc_iter->SeekToFirst();
   assert(gc_iter->Valid());
   for (; gc_iter->Valid(); gc_iter->Next()) {
+    total_count++;
     if (IsShutingDown()) {
       s = Status::ShutdownInProgress();
       break;
@@ -207,8 +220,10 @@ Status BlobGCJob::DoRunGC() {
     if (discardable) {
       metrics_.gc_num_keys_overwritten++;
       metrics_.gc_bytes_overwritten += blob_index.blob_handle.size;
+      discardable_count++;
       continue;
     }
+    valid_count++;
     last_key_is_fresh = true;
 
     if (blob_gc_->titan_cf_options().blob_run_mode ==
@@ -279,6 +294,12 @@ Status BlobGCJob::DoRunGC() {
       break;
     }
   }
+
+  TITAN_LOG_INFO(db_options_.info_log, "Titan GC total key count: %" PRIu64
+                                       " valid key count: %" PRIu64
+                                       " discardable key count: %" PRIu64,
+                 total_count, valid_count, discardable_count);
+
 
   if (gc_iter->status().ok() && s.ok()) {
     if (blob_file_builder && blob_file_handle) {
