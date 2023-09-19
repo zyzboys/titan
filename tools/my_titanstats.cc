@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
         
     rocksdb::titandb::TitanDB *db;
     rocksdb::titandb::TitanOptions options;
-    options.statistics = rocksdb::CreateDBStatistics<209,67>();
+    options.statistics = rocksdb::CreateDBStatistics<214,67>();
     options.create_if_missing = true;
     rocksdb::Status status =
         rocksdb::titandb::TitanDB::Open(options, argv[1], &db);
