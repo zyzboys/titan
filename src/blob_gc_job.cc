@@ -221,7 +221,17 @@ Status BlobGCJob::DoRunGC() {
     bool discardable = false;
     // use bitset to check if blob is live
     s = DiscardEntryWithBitset(blob_index, &discardable);
-    // s = DiscardEntry(gc_iter->key(), blob_index, &discardable);
+    if (!s.ok()) {
+      break;
+    }
+    if (discardable) {
+      metrics_.gc_num_keys_overwritten_check++;
+      metrics_.gc_bytes_overwritten_check += blob_index.blob_handle.size;
+      discardable_count++;
+      continue;
+    }
+    // maybe valid, check again with LSM
+    s = DiscardEntry(gc_iter->key(), blob_index, &discardable);
     if (!s.ok()) {
       break;
     }
