@@ -146,7 +146,8 @@ TitanDBImpl::TitanDBImpl(const TitanDBOptions& options,
       dbname_(dbname),
       env_(options.env),
       env_options_(options),
-      db_options_(options) {
+      db_options_(options),
+      size_cv_(&size_mutex_) {
   if (db_options_.dirname.empty()) {
     db_options_.dirname = dbname_ + "/titandb";
   }
@@ -373,6 +374,7 @@ Status TitanDBImpl::Close() {
 Status TitanDBImpl::CloseImpl() {
   {
     MutexLock l(&mutex_);
+    MutexLock l1(&size_mutex_);
     // Although `shuting_down_` is atomic bool object, we should set it under
     // the protection of mutex_, otherwise, there maybe something wrong with it,
     // like:
@@ -381,6 +383,8 @@ Status TitanDBImpl::CloseImpl() {
     // 3, B thread: unschedule all bg work
     // 4, A thread: schedule bg work
     shuting_down_.store(true, std::memory_order_release);
+    block_for_size_.store(false);
+    size_cv_.SignalAll();
   }
 
   if (thread_pool_ != nullptr) {
@@ -575,10 +579,55 @@ Status TitanDBImpl::Put(const rocksdb::WriteOptions& options,
                       : db_->Put(options, column_family, key, value);
 }
 
+// Status TitanDBImpl::Put(const rocksdb::WriteOptions& options,
+//                         rocksdb::ColumnFamilyHandle* column_family,
+//                         const rocksdb::Slice& key,
+//                         const rocksdb::Slice& value) {
+//   if (HasBGError()) return GetBGError();
+//   while (db_options_.block_write_size > 0 && block_for_size_.load()) {
+//     std::cout << "block write" << std::endl;
+//     {
+//       uint32_t cf_id = column_family->GetID();
+//       auto bs = blob_file_set_->GetBlobStorage(cf_id).lock();
+//       bs->ComputeGCScore();
+//       AddToGCQueue(cf_id);
+//       MaybeScheduleGC();
+//     }
+//     MutexLock l(&size_mutex_);
+//     if (block_for_size_.load()) {
+//       size_cv_.Wait();
+//     }
+//   }
+
+//   return db_->Put(options, column_family, key, value);
+
+// }
+
+// Status TitanDBImpl::Write(const rocksdb::WriteOptions& options,
+//                           rocksdb::WriteBatch* updates,
+//                           PostWriteCallback* callback) {
+//   return HasBGError() ? GetBGError() : db_->Write(options, updates, callback);
+// }
+
 Status TitanDBImpl::Write(const rocksdb::WriteOptions& options,
                           rocksdb::WriteBatch* updates,
                           PostWriteCallback* callback) {
-  return HasBGError() ? GetBGError() : db_->Write(options, updates, callback);
+  if (HasBGError()) return GetBGError();
+  while (db_options_.block_write_size > 0 && block_for_size_.load()) {
+    {
+      // uint32_t cf_id = column_family->GetID();
+      // auto bs = blob_file_set_->GetBlobStorage(cf_id).lock();
+      // bs->ComputeGCScore();
+      // AddToGCQueue(cf_id);
+      MaybeScheduleGC();
+    }
+    MutexLock l(&size_mutex_);
+    if (block_for_size_.load()) {
+      size_cv_.Wait();
+    }
+  }
+
+  return db_->Write(options, updates, callback);
 }
 
 Status TitanDBImpl::MultiBatchWrite(const WriteOptions& options,
@@ -1463,6 +1512,17 @@ void TitanDBImpl::OnCompactionCompleted(
           file->file_state() == BlobFileMeta::FileState::kToMerge) {
         auto after = file->GetDiscardableRatioLevel();
         AddStats(stats_.get(), compaction_job_info.cf_id, after, 1);
+      }
+    }
+
+    if (db_options_.block_write_size > 0) {
+      uint64_t total_size = 0;
+      GetIntProperty("rocksdb.titandb.live-blob-file-size", &total_size);
+      if (total_size > db_options_.block_write_size) {
+        block_for_size_.store(true);
+      } else if (block_for_size_.load())  {
+        block_for_size_.store(false);
+        size_cv_.SignalAll();
       }
     }
     // If level merge is enabled, blob files will be deleted by live

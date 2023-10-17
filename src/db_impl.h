@@ -342,6 +342,10 @@ class TitanDBImpl : public TitanDB {
   int disable_titandb_file_deletions_ = 0;
 
   std::atomic_bool shuting_down_{false};
+  
+  std::atomic<bool> block_for_size_{false};
+  port::CondVar size_cv_;
+  mutable port::Mutex size_mutex_;
 };
 
 }  // namespace titandb

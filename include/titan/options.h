@@ -37,6 +37,9 @@ struct TitanDBOptions : public DBOptions {
   // Default: 600 (10 min)
   uint32_t titan_stats_dump_period_sec{600};
 
+  // block foreground write if blob size too large
+  uint64_t block_write_size{0};
+
   TitanDBOptions() = default;
   explicit TitanDBOptions(const DBOptions& options) : DBOptions(options) {}
 

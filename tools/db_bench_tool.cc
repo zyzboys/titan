@@ -790,14 +790,14 @@ DEFINE_uint64(titan_merge_small_file_threshold, 8 * 1024 * 1024,
               "The blob file size less than this option will be mark GC.");
 
 DEFINE_uint64(titan_min_gc_batch_size, 512 * 1024 * 1024,
-              "Min batch size for GC");
+              "Min batch size for GC.");
 
 DEFINE_uint64(titan_max_gc_batch_size, 1024 * 1024 * 1024,
-              "Max batch size for GC");
+              "Max batch size for GC.");
 
 DEFINE_bool(titan_disable_background_gc,
             rocksdb::titandb::TitanOptions().disable_background_gc,
-            "Disable Titan background GC");
+            "Disable Titan background GC.");
 
 DEFINE_int32(titan_max_background_gc,
              rocksdb::titandb::TitanOptions().max_background_gc,
@@ -805,6 +805,8 @@ DEFINE_int32(titan_max_background_gc,
 
 DEFINE_int64(titan_blob_cache_size, 0,
              "Size of Titan blob cache. Disabled by default.");
+
+DEFINE_uint64(titan_block_write_size, 0, "block foreground write if blob size too large.");
 
 // Secondary DB instance Options
 DEFINE_bool(use_secondary_db, false,
@@ -3880,6 +3882,7 @@ class Benchmark {
     opts->min_gc_batch_size = FLAGS_titan_min_gc_batch_size;
     opts->disable_background_gc = FLAGS_titan_disable_background_gc;
     opts->max_background_gc = FLAGS_titan_max_background_gc;
+    opts->block_write_size = FLAGS_titan_block_write_size;
     //opts->min_gc_batch_size = 128 << 20;
     opts->blob_file_compression = FLAGS_compression_type_e;
     if (FLAGS_titan_blob_cache_size > 0) {
