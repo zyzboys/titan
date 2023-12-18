@@ -267,6 +267,7 @@ Status TitanDBImpl::OpenImpl(const std::vector<TitanCFDescriptor>& descs,
   // so new `BlobFileSet` here but not in constructor is to get a proper info
   // log.
   blob_file_set_.reset(new BlobFileSet(db_options_, stats_.get()));
+  shadow_set_.reset(new ShadowSet(db_options_, stats_.get()));
   // Setup options.
   db_options_.listeners.emplace_back(std::make_shared<BaseDbListener>(this));
   // Descriptors for actually open DB.
@@ -310,6 +311,8 @@ Status TitanDBImpl::OpenImpl(const std::vector<TitanCFDescriptor>& descs,
     return s;
   }
   db_impl_ = reinterpret_cast<DBImpl*>(db_->GetRootDB());
+  db_impl_->GetDbIdentity(db_id_);
+  db_impl_->GetDbSessionId(db_session_id_);
   assert(db_ != nullptr);
   assert(handles->size() == descs.size());
   std::map<uint32_t, TitanCFOptions> column_families;

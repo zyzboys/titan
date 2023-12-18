@@ -3,11 +3,13 @@
 #include "db/db_impl/db_impl.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
+#include "rocksdb/types.h"
 
 #include "blob_file_builder.h"
 #include "blob_file_iterator.h"
 #include "blob_file_manager.h"
 #include "blob_file_set.h"
+#include "shadow_set.h"
 #include "blob_gc.h"
 #include "titan/options.h"
 #include "titan_stats.h"
@@ -23,6 +25,12 @@ class BlobGCJob {
             const EnvOptions &env_options, BlobFileManager *blob_file_manager,
             BlobFileSet *blob_file_set, LogBuffer *log_buffer,
             std::atomic_bool *shuting_down, TitanStats *stats);
+  
+  BlobGCJob(BlobGC *blob_gc, DB *db, port::Mutex *mutex,
+            const TitanDBOptions &titan_db_options, Env *env,
+            const EnvOptions &env_options, BlobFileManager *blob_file_manager,
+            BlobFileSet *blob_file_set, ShadowSet *shadow_set, LogBuffer *log_buffer,
+            std::atomic_bool *shuting_down, TitanStats *stats, std::string db_id, std::string db_session_id);
 
   // No copying allowed
   BlobGCJob(const BlobGCJob &) = delete;
@@ -52,6 +60,9 @@ class BlobGCJob {
   EnvOptions env_options_;
   BlobFileManager *blob_file_manager_;
   BlobFileSet *blob_file_set_;
+  ShadowSet *shadow_set_;
+  std::string db_id_;
+  std::string db_session_id_;
   LogBuffer *log_buffer_{nullptr};
 
   std::vector<std::pair<std::unique_ptr<BlobFileHandle>,
@@ -59,6 +70,8 @@ class BlobGCJob {
       blob_file_builders_;
   std::vector<std::pair<WriteBatch, GarbageCollectionWriteCallback>>
       rewrite_batches_;
+
+  std::vector<std::unique_ptr<TableBuilder>> shadow_builders_;
 
   std::atomic_bool *shuting_down_{nullptr};
 
@@ -97,6 +110,9 @@ class BlobGCJob {
   Status DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable);
   Status InstallOutputBlobFiles();
   Status RewriteValidKeyToLSM();
+  Status OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std::unique_ptr<WritableFileWriter> *file);
+  Status FinishGCOutputShadow(std::unique_ptr<TableBuilder> *builder);
+  Status AddToShadow(std::unique_ptr<TableBuilder> *builder, BlobFileBuilder::OutContexts& contexts);
   Status DeleteInputBlobFiles();
 
   bool IsShutingDown();

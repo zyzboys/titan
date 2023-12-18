@@ -18,6 +18,10 @@ Status TitanTableFactory::NewTableReader(
 
 TableBuilder *TitanTableFactory::NewTableBuilder(
     const TableBuilderOptions &options, WritableFileWriter *file) const {
+  if (options.reason == TableFileCreationReason::kShadow) {
+    TableBuilder *shadow_builder = base_factory_->NewTableBuilder(options, file);
+    return shadow_builder;
+  }
   std::unique_ptr<TableBuilder> base_builder(
       base_factory_->NewTableBuilder(options, file));
   if (!db_impl_->initialized()) {

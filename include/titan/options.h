@@ -161,6 +161,16 @@ struct TitanCFOptions : public ColumnFamilyOptions {
   // Default: false
   bool skip_value_in_compaction_filter{false};
 
+  // If set true, Titan will rewrite keys in to shadow-sst instead of LSM-Tree
+  //
+  // Default: false
+  bool rewrite_shadow{false};
+
+  // The desirable shadow size. This is not a hard limit but a wish.
+  //
+  // Default: 4MB
+  uint64_t shadow_target_size{4 << 20};
+
   TitanCFOptions() = default;
   explicit TitanCFOptions(const ColumnFamilyOptions& options)
       : ColumnFamilyOptions(options) {}

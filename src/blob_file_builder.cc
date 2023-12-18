@@ -53,7 +53,7 @@ void BlobFileBuilder::Add(const BlobRecord& record,
                           OutContexts* out_ctx) {
   if (!ok()) return;
   std::string key = record.key.ToString();
-  if (builder_state_ == BuilderState::kBuffered) {
+  if (builder_state_ == BuilderState::kBuffered) { 
     std::string record_str;
     // Encode to take ownership of underlying string.
     record.EncodeTo(&record_str);

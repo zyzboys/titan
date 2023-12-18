@@ -819,6 +819,12 @@ DEFINE_int32(secondary_update_interval, 5,
              "Secondary instance attempts to catch up with the primary every "
              "secondary_update_interval seconds.");
 
+DEFINE_bool(titan_rewrite_shadow, false,
+            "If set true, Titan will rewrite keys in to shadow-sst instead of LSM-Tree.");
+
+DEFINE_uint64(titan_shadow_target_size, 4 * 1024 * 1024, 
+              "The desirable shadow size. This is not a hard limit but a wish.");
+
 #endif  // ROCKSDB_LITE
 
 DEFINE_bool(report_bg_io_stats, false,
@@ -3880,6 +3886,8 @@ class Benchmark {
     opts->min_gc_batch_size = FLAGS_titan_min_gc_batch_size;
     opts->disable_background_gc = FLAGS_titan_disable_background_gc;
     opts->max_background_gc = FLAGS_titan_max_background_gc;
+    opts->rewrite_shadow = FLAGS_titan_rewrite_shadow;
+    opts->shadow_target_size = FLAGS_titan_shadow_target_size;
     //opts->min_gc_batch_size = 128 << 20;
     opts->blob_file_compression = FLAGS_compression_type_e;
     if (FLAGS_titan_blob_cache_size > 0) {

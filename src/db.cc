@@ -21,6 +21,7 @@ Status TitanDB::Open(const TitanOptions& options, const std::string& dbname,
   return s;
 }
 
+// peiqi: open titandb
 Status TitanDB::Open(const TitanDBOptions& db_options,
                      const std::string& dbname,
                      const std::vector<TitanCFDescriptor>& descs,

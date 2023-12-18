@@ -166,6 +166,7 @@ void TitanDBImpl::BackgroundCallGC() {
   }
 }
 
+// peiqi: GC start
 Status TitanDBImpl::BackgroundGC(LogBuffer* log_buffer,
                                  uint32_t column_family_id) {
   mutex_.AssertHeld();
@@ -207,8 +208,8 @@ Status TitanDBImpl::BackgroundGC(LogBuffer* log_buffer,
                     TITAN_GC_MICROS);
     BlobGCJob blob_gc_job(blob_gc.get(), db_, &mutex_, db_options_, env_,
                           env_options_, blob_manager_.get(),
-                          blob_file_set_.get(), log_buffer, &shuting_down_,
-                          stats_.get());
+                          blob_file_set_.get(), shadow_set_.get(), log_buffer, &shuting_down_,
+                          stats_.get(), db_id_, db_session_id_);
     s = blob_gc_job.Prepare();
     if (s.ok()) {
       mutex_.Unlock();
