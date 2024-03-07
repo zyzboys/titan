@@ -219,7 +219,8 @@ class BlobGCJobTest : public testing::Test {
                           Env::Default(), EnvOptions(), nullptr, blob_file_set_,
                           nullptr, nullptr, nullptr);
     bool discardable = false;
-    ASSERT_OK(blob_gc_job.DiscardEntry(key, blob_index, &discardable));
+    int level;
+    ASSERT_OK(blob_gc_job.DiscardEntry(key, blob_index, &discardable, &level));
     ASSERT_FALSE(discardable);
   }
 

@@ -68,10 +68,12 @@ class BlobGCJob {
   std::vector<std::pair<std::unique_ptr<BlobFileHandle>,
                         std::unique_ptr<BlobFileBuilder>>>
       blob_file_builders_;
+  
+  std::vector<std::pair<std::unique_ptr<FileMetaData>,
+                        std::unique_ptr<TableBuilder>>>
+      shadow_builders_;
   std::vector<std::pair<WriteBatch, GarbageCollectionWriteCallback>>
       rewrite_batches_;
-
-  std::vector<std::unique_ptr<TableBuilder>> shadow_builders_;
 
   std::atomic_bool *shuting_down_{nullptr};
 
@@ -106,11 +108,12 @@ class BlobGCJob {
   void BatchWriteNewIndices(BlobFileBuilder::OutContexts &contexts, Status *s);
   Status BuildIterator(std::unique_ptr<BlobFileMergeIterator> *result);
   Status DiscardEntry(const Slice &key, const BlobIndex &blob_index,
-                      bool *discardable);
+                      bool *discardable, int *level);
   Status DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable);
+  Status InstallOutputShadows();
   Status InstallOutputBlobFiles();
   Status RewriteValidKeyToLSM();
-  Status OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std::unique_ptr<WritableFileWriter> *file);
+  Status OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std::unique_ptr<WritableFileWriter> *file, int level);
   Status FinishGCOutputShadow(std::unique_ptr<TableBuilder> *builder);
   Status AddToShadow(std::unique_ptr<TableBuilder> *builder, BlobFileBuilder::OutContexts& contexts);
   Status DeleteInputBlobFiles();

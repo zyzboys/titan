@@ -6,6 +6,7 @@
 
 #include "blob_format.h"
 #include "titan/options.h"
+#include "db/version_edit.h"
 
 namespace rocksdb {
 namespace titandb {
@@ -40,9 +41,14 @@ class BlobGC {
 
   bool trigger_next() { return trigger_next_; }
 
+  std::vector<FileMetaData>& GetOutputShadows() {
+    return output_shadows_;
+  }
+
  private:
   std::vector<std::shared_ptr<BlobFileMeta>> inputs_;
   std::vector<BlobFileMeta*> outputs_;
+  std::vector<FileMetaData> output_shadows_;
   TitanCFOptions titan_cf_options_;
   ColumnFamilyHandle* cfh_{nullptr};
   // Whether need to trigger gc after this gc or not

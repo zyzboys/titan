@@ -205,6 +205,11 @@ Status BlobGCJob::DoRunGC() {
   std::unique_ptr<BlobFileBuilder> blob_file_builder;
   std::unique_ptr<TableBuilder> shadow_builder;
   std::unique_ptr<WritableFileWriter> shadow_file;
+  autovector<std::unique_ptr<TableBuilder>> level_shadow_builders;
+  autovector<std::unique_ptr<WritableFileWriter>> level_shadow_files;
+  // preallocate 7(max) levels for shadow builders
+  level_shadow_builders.resize(7);
+  level_shadow_files.resize(7);
   //  uint64_t drop_entry_num = 0;
   //  uint64_t drop_entry_size = 0;
   //  uint64_t total_entry_num = 0;
@@ -243,19 +248,23 @@ Status BlobGCJob::DoRunGC() {
     }
 
     bool discardable = false;
+    int level = -1;
     // use bitset to check if blob is live
     s = DiscardEntryWithBitset(blob_index, &discardable);
     if (!s.ok()) {
       break;
     }
     if (!discardable) {
-      // maybe valid, check again in LSM
-      s = DiscardEntry(gc_iter->key(), blob_index, &discardable);
+      // maybe valid, check again in LSM and get the level of valid key
+      s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level);
       if (!s.ok()) {
         break;
       }
     }
     if (discardable) {
+      if (level == 0) {
+        std::cout << "L0 discardable" << std::endl;
+      }
       metrics_.gc_num_keys_overwritten_check++;
       metrics_.gc_bytes_overwritten_check += blob_index.blob_handle.size;
       discardable_count++;
@@ -328,27 +337,54 @@ Status BlobGCJob::DoRunGC() {
 
     // peiqi: gc create sst
     // rewrite valid key and blob index to shadow
+    // if (blob_gc_->titan_cf_options().rewrite_shadow) {
+    //   if (!shadow_builder) {
+    //     s = OpenGCOutputShadow(&shadow_builder, &shadow_file);
+    //     if (!s.ok()) {
+    //       break;
+    //     }
+    //     shadow_size = 0;
+    //   }
+    //   assert(shadow_builder);
+    //   s = AddToShadow(&shadow_builder, contexts);
+    //   if (!s.ok()) {
+    //     break;
+    //   }
+    //   shadow_size = shadow_builder->EstimatedFileSize();
+    //   if (shadow_size >= blob_gc_->titan_cf_options().shadow_target_size) {
+    //     s = shadow_builder->Finish();
+    //     if (!s.ok()) {
+    //       break;
+    //     }
+    //     shadow_builder.reset();
+    //     shadow_file.reset();
+    //   }
+    // } else {
+    //   // rewrite valid key and blob index to LSM
+    //   BatchWriteNewIndices(contexts, &s);
+    // }
+
     if (blob_gc_->titan_cf_options().rewrite_shadow) {
-      if (!shadow_builder) {
-        s = OpenGCOutputShadow(&shadow_builder, &shadow_file);
+      if (!level_shadow_builders[level]) {
+        s = OpenGCOutputShadow(&level_shadow_builders[level], &level_shadow_files[level], level);
         if (!s.ok()) {
           break;
         }
         shadow_size = 0;
       }
-      assert(shadow_builder);
-      s = AddToShadow(&shadow_builder, contexts);
+      assert(level_shadow_builders[level]);
+      s = AddToShadow(&level_shadow_builders[level], contexts);
       if (!s.ok()) {
         break;
       }
-      shadow_size = shadow_builder->EstimatedFileSize();
+      shadow_size = level_shadow_builders[level]->EstimatedFileSize();
       if (shadow_size >= blob_gc_->titan_cf_options().shadow_target_size) {
-        s = shadow_builder->Finish();
+        s = level_shadow_builders[level]->Finish();
         if (!s.ok()) {
           break;
         }
-        shadow_builder.reset();
-        shadow_file.reset();
+        level_shadow_builders[level].reset();
+        level_shadow_files[level].reset();
       }
     } else {
       // rewrite valid key and blob index to LSM
@@ -379,22 +415,39 @@ Status BlobGCJob::DoRunGC() {
     return gc_iter->status();
   }
 
-  if (blob_gc_->titan_cf_options().rewrite_shadow && shadow_builder) {
-      s = shadow_builder->Finish();
-      if (!s.ok()) {
-        return s;
+  // if (blob_gc_->titan_cf_options().rewrite_shadow && shadow_builder) {
+  //     s = shadow_builder->Finish();
+  //     if (!s.ok()) {
+  //       return s;
+  //     }
+  //     shadow_builder.reset();
+  //     shadow_file.reset();
+  // }
+
+  if (blob_gc_->titan_cf_options().rewrite_shadow) {
+    for (auto& builder : level_shadow_builders) {
+      if (builder) {
+        s = builder->Finish();
+        if (!s.ok()) {
+          return s;
+        }
+        builder.reset();
       }
-      shadow_builder.reset();
-      shadow_file.reset();
-  }
+    }
+    for (auto& file : level_shadow_files) {
+      if (file) {
+        file.reset();
+      }
+    }
+  }    
 
   return s;
 }
 
-Status BlobGCJob::OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std::unique_ptr<WritableFileWriter> *file) {
+Status BlobGCJob::OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std::unique_ptr<WritableFileWriter> *file, int level) {
   Status s;
   uint64_t shadow_number = shadow_set_->NewFileNumber();
-  std::string shadow_name = shadow_set_->NewFileName(shadow_number);
+  std::string shadow_name = shadow_set_->NewFileName(shadow_number) + "_" + std::to_string(level);
   ColumnFamilyData *cfd = blob_gc_->GetColumnFamilyData();
   std::unique_ptr<FSWritableFile> f;
   s = env_->GetFileSystem()->NewWritableFile(
@@ -412,7 +465,13 @@ Status BlobGCJob::OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std
 
   TITAN_LOG_INFO(db_options_.info_log,
                  "Titan new GC shadow %" PRIu64 ".", shadow_number);
-  
+  // {
+  //   //init shadow meta
+  //   FileMetaData meta;
+  //   meta.fd = FileDescriptor(shadow_number, -1, 0);
+  //   blob_gc_->GetOutputShadows().emplace_back(std::move(meta));
+  // }
+
   TableBuilderOptions tboptions(
       *cfd->ioptions(), *(cfd->GetLatestMutableCFOptions()),
       cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
@@ -443,6 +502,7 @@ Status BlobGCJob::AddToShadow(std::unique_ptr<TableBuilder> *builder, BlobFileBu
     }
     InternalKey shadow_ikey(ikey.user_key, 1, kTypeBlobIndex);
     builder->get()->Add(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry)); 
+    //blob_gc_->GetOutputShadows().back().UpdateBoundaries(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry), ikey.sequence, ikey.type);
     if (!s.ok()) break;
   }
   return s;
@@ -541,7 +601,7 @@ Status BlobGCJob::DiscardEntryWithBitset(const BlobIndex &blob_index, bool *disc
 }
 
 Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
-                               bool* discardable) {
+                               bool* discardable, int *level) {
   TitanStopWatch sw(env_, metrics_.gc_read_lsm_micros);
   assert(discardable != nullptr);
   PinnableSlice index_entry;
@@ -550,7 +610,13 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
   gopts.column_family = blob_gc_->column_family_handle();
   gopts.value = &index_entry;
   gopts.is_blob_index = &is_blob_index;
+  // get the level of the key
+  gopts.return_level = true;
   Status s = base_db_impl_->GetImpl(ReadOptions(), key, gopts);
+  *level = gopts.level;
+  if (*level == 0) {
+    std::cout << "level 0" << std::endl;
+  }
   if (!s.ok() && !s.IsNotFound()) {
     return s;
   }
@@ -593,6 +659,15 @@ Status BlobGCJob::Finish() {
                           blob_gc_->column_family_handle()->GetName().c_str(),
                           s.ToString().c_str());
         }
+      } else {
+        // rewrite_shadow is true, install output shadows
+        s = InstallOutputShadows();
+        if (!s.ok()) {
+          TITAN_LOG_ERROR(db_options_.info_log,
+                          "[%s] GC job failed to install output shadows: %s",
+                          blob_gc_->column_family_handle()->GetName().c_str(),
+                          s.ToString().c_str());
+        }
       }
       
     } else {
@@ -614,6 +689,14 @@ Status BlobGCJob::Finish() {
   }
 
   return s;
+}
+
+Status BlobGCJob::InstallOutputShadows() {
+  TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadows()");
+  for (auto& file : blob_gc_->GetOutputShadows()) {
+    shadow_set_->GetShadows().push_back(file);
+  }
+  return Status::OK();
 }
 
 Status BlobGCJob::InstallOutputBlobFiles() {
