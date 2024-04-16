@@ -13,7 +13,7 @@ if (NOT ROCKSDB_GIT_BRANCH)
 endif()
 
 #set rocksdb dir
-set(ROCKSDB_DIR "/home/zhangyuzhan/src/rocksdb")
+set(ROCKSDB_DIR "./rocksdb_6_29")
 
 if (NOT DEFINED ROCKSDB_DIR)
   if (GIT_FOUND)
