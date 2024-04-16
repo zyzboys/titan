@@ -1,14 +1,14 @@
-*.a
-*.o
-*.swp
-*_test
-titandb_bench
-titandb_stress
+# *.a
+# *.o
+# *.swp
+# *_test
+# titandb_bench
+# titandb_stress
 
-build/
-rocksdb
-Makefile
-*.cmake
+# build/
+# rocksdb
+# Makefile
+# *.cmake
 .idea/
 .vscode/
-cmake-build-debug/
+# cmake-build-debug/
