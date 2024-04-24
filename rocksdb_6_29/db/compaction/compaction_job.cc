@@ -2022,7 +2022,7 @@ Status CompactionJob::FinishCompactionOutputFile(
   sub_compact->current_output_file_size = 0;
   return s;
 }
-
+//peiqi: compaction install results
 Status CompactionJob::InstallCompactionResults(
     const MutableCFOptions& mutable_cf_options) {
   assert(compact_);

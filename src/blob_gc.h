@@ -39,16 +39,15 @@ class BlobGC {
 
   void ReleaseGcFiles();
 
+  void AddOutputShadow(FileMetaData*);
+
   bool trigger_next() { return trigger_next_; }
 
-  std::vector<FileMetaData>& GetOutputShadows() {
-    return output_shadows_;
-  }
+
 
  private:
   std::vector<std::shared_ptr<BlobFileMeta>> inputs_;
   std::vector<BlobFileMeta*> outputs_;
-  std::vector<FileMetaData> output_shadows_;
   TitanCFOptions titan_cf_options_;
   ColumnFamilyHandle* cfh_{nullptr};
   // Whether need to trigger gc after this gc or not

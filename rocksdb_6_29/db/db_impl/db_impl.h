@@ -65,6 +65,7 @@
 #include "util/repeatable_thread.h"
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
+#include "db/shadow_set.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -408,6 +409,8 @@ class DBImpl : public DB {
   Status GetStatsHistory(
       uint64_t start_time, uint64_t end_time,
       std::unique_ptr<StatsHistoryIterator>* stats_iterator) override;
+
+  ShadowSet* GetShadowSet();
 
 #ifndef ROCKSDB_LITE
   using DB::ResetStats;
@@ -952,6 +955,8 @@ class DBImpl : public DB {
 
   InstrumentedMutex* mutex() const { return &mutex_; }
 
+  port::Mutex* shadow_mutex()  {return &shadow_mutex_;}
+
   // Initialize a brand new DB. The DB directory is expected to be empty before
   // calling it. Push new manifest file name into `new_filenames`.
   Status NewDB(std::vector<std::string>* new_filenames);
@@ -1219,6 +1224,9 @@ class DBImpl : public DB {
   std::unique_ptr<Tracer> tracer_;
   InstrumentedMutex trace_mutex_;
   BlockCacheTracer block_cache_tracer_;
+
+  mutable port::Mutex shadow_mutex_; //protect一些会被compaction和gc同时更新的东西，目前是考虑单线程compaction单线程gc
+  std::unique_ptr<ShadowSet> shadow_set_;
 
   // State below is protected by mutex_
   // With two_write_queues enabled, some of the variables that accessed during

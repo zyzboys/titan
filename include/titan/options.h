@@ -166,6 +166,9 @@ struct TitanCFOptions : public ColumnFamilyOptions {
   // Default: false
   bool rewrite_shadow{false};
 
+  // If set true, Titan will first check bitset when GC
+  bool drop_key_bitset{false};
+
   // The desirable shadow size. This is not a hard limit but a wish.
   //
   // Default: 4MB

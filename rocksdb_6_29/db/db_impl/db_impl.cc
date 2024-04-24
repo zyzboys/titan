@@ -238,7 +238,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       atomic_flush_install_cv_(&mutex_),
       blob_callback_(immutable_db_options_.sst_file_manager.get(), &mutex_,
                      &error_handler_, &event_logger_,
-                     immutable_db_options_.listeners, dbname_) {
+                     immutable_db_options_.listeners, dbname_),
+      shadow_mutex_(false) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
@@ -276,6 +277,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   if (write_buffer_manager_) {
     wbm_stall_.reset(new WBMStallInterface());
   }
+  shadow_set_.reset(new ShadowSet());
+  
 }
 
 Status DBImpl::Resume() {
@@ -4036,6 +4039,11 @@ Status DBImpl::GetDbIdentity(std::string& identity) const {
   identity.assign(db_id_);
   return Status::OK();
 }
+
+ShadowSet* DBImpl::GetShadowSet() {
+  return shadow_set_.get();
+}
+
 
 Status DBImpl::GetDbIdentityFromIdentityFile(std::string* identity) const {
   std::string idfilename = IdentityFileName(dbname_);

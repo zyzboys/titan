@@ -9,7 +9,7 @@
 #include "blob_file_iterator.h"
 #include "blob_file_manager.h"
 #include "blob_file_set.h"
-#include "shadow_set.h"
+#include "db/shadow_set.h"
 #include "blob_gc.h"
 #include "titan/options.h"
 #include "titan_stats.h"
@@ -20,17 +20,18 @@ namespace titandb {
 
 class BlobGCJob {
  public:
-  BlobGCJob(BlobGC *blob_gc, DB *db, port::Mutex *mutex,
-            const TitanDBOptions &titan_db_options, Env *env,
-            const EnvOptions &env_options, BlobFileManager *blob_file_manager,
-            BlobFileSet *blob_file_set, LogBuffer *log_buffer,
-            std::atomic_bool *shuting_down, TitanStats *stats);
+  BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
+                     const TitanDBOptions& titan_db_options, Env* env,
+                     const EnvOptions& env_options,
+                     BlobFileManager* blob_file_manager,
+                     BlobFileSet* blob_file_set, LogBuffer* log_buffer,
+                     std::atomic_bool* shuting_down, TitanStats* stats, std::string& dbname, std::string& db_id, 
+                     std::string& db_session_id, port::Mutex* shadow_mutex, ShadowSet* shadow_set);
   
   BlobGCJob(BlobGC *blob_gc, DB *db, port::Mutex *mutex,
             const TitanDBOptions &titan_db_options, Env *env,
             const EnvOptions &env_options, BlobFileManager *blob_file_manager,
-            BlobFileSet *blob_file_set, ShadowSet *shadow_set, LogBuffer *log_buffer,
-            std::atomic_bool *shuting_down, TitanStats *stats, std::string db_id, std::string db_session_id);
+            BlobFileSet *blob_file_set, LogBuffer *log_buffer, std::atomic_bool *shuting_down, TitanStats *stats);
 
   // No copying allowed
   BlobGCJob(const BlobGCJob &) = delete;
@@ -54,24 +55,30 @@ class BlobGCJob {
   BlobGC *blob_gc_;
   DB *base_db_;
   DBImpl *base_db_impl_;
+  // DBImpl state
+  const std::string dbname_;
+  const std::string db_id_;
+  const std::string db_session_id_;
+  std::shared_ptr<IOTracer> io_tracer_ = nullptr;
+  port::Mutex *shadow_mutex_;
+  ShadowSet *shadow_set_;
+
   port::Mutex *mutex_;
   TitanDBOptions db_options_;
   Env *env_;
   EnvOptions env_options_;
   BlobFileManager *blob_file_manager_;
   BlobFileSet *blob_file_set_;
-  ShadowSet *shadow_set_;
-  std::string db_id_;
-  std::string db_session_id_;
+  //ShadowSet *shadow_set_;
+  // std::string db_id_;
+  // std::string db_session_id_;
   LogBuffer *log_buffer_{nullptr};
 
   std::vector<std::pair<std::unique_ptr<BlobFileHandle>,
                         std::unique_ptr<BlobFileBuilder>>>
       blob_file_builders_;
   
-  std::vector<std::pair<std::unique_ptr<FileMetaData>,
-                        std::unique_ptr<TableBuilder>>>
-      shadow_builders_;
+  std::vector<std::pair<int, FileMetaData>> shadow_metas_;
   std::vector<std::pair<WriteBatch, GarbageCollectionWriteCallback>>
       rewrite_batches_;
 
@@ -113,9 +120,9 @@ class BlobGCJob {
   Status InstallOutputShadows();
   Status InstallOutputBlobFiles();
   Status RewriteValidKeyToLSM();
-  Status OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std::unique_ptr<WritableFileWriter> *file, int level);
-  Status FinishGCOutputShadow(std::unique_ptr<TableBuilder> *builder);
-  Status AddToShadow(std::unique_ptr<TableBuilder> *builder, BlobFileBuilder::OutContexts& contexts);
+  Status OpenGCOutputShadow(ShadowHandle *handle, int level);
+  Status AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts& contexts);
+  Status FinishGCOutputShadow(ShadowHandle *handle, int level);
   Status DeleteInputBlobFiles();
 
   bool IsShutingDown();

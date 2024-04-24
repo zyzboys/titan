@@ -87,6 +87,31 @@ BlobGCJob::BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
                      const EnvOptions& env_options,
                      BlobFileManager* blob_file_manager,
                      BlobFileSet* blob_file_set, LogBuffer* log_buffer,
+                     std::atomic_bool* shuting_down, TitanStats* stats, std::string& dbname, 
+                     std::string& db_id, std::string& db_session_id, port::Mutex* shadow_mutex, ShadowSet* shadow_set)
+    : blob_gc_(blob_gc),
+      base_db_(db),
+      base_db_impl_(reinterpret_cast<DBImpl*>(base_db_)),
+      mutex_(mutex),
+      db_options_(titan_db_options),
+      env_(env),
+      env_options_(env_options),
+      blob_file_manager_(blob_file_manager),
+      blob_file_set_(blob_file_set),
+      log_buffer_(log_buffer),
+      shuting_down_(shuting_down),
+      stats_(stats),
+      dbname_(dbname),
+      db_id_(db_id),
+      db_session_id_(db_session_id),
+      shadow_mutex_(shadow_mutex),
+      shadow_set_(shadow_set) {}
+
+BlobGCJob::BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
+                     const TitanDBOptions& titan_db_options, Env* env,
+                     const EnvOptions& env_options,
+                     BlobFileManager* blob_file_manager,
+                     BlobFileSet* blob_file_set, LogBuffer* log_buffer,
                      std::atomic_bool* shuting_down, TitanStats* stats)
     : blob_gc_(blob_gc),
       base_db_(db),
@@ -100,28 +125,6 @@ BlobGCJob::BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
       log_buffer_(log_buffer),
       shuting_down_(shuting_down),
       stats_(stats) {}
-
-BlobGCJob::BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
-                     const TitanDBOptions& titan_db_options, Env* env,
-                     const EnvOptions& env_options,
-                     BlobFileManager* blob_file_manager,
-                     BlobFileSet* blob_file_set, ShadowSet* shadow_set, LogBuffer* log_buffer,
-                     std::atomic_bool* shuting_down, TitanStats* stats, std::string db_id, std::string db_session_id)
-    : blob_gc_(blob_gc),
-      base_db_(db),
-      base_db_impl_(reinterpret_cast<DBImpl*>(base_db_)),
-      mutex_(mutex),
-      db_options_(titan_db_options),
-      env_(env),
-      env_options_(env_options),
-      blob_file_manager_(blob_file_manager),
-      blob_file_set_(blob_file_set),
-      shadow_set_(shadow_set),
-      log_buffer_(log_buffer),
-      shuting_down_(shuting_down),
-      stats_(stats),
-      db_id_(db_id),
-      db_session_id_(db_session_id) {}
 
 BlobGCJob::~BlobGCJob() {
   if (log_buffer_) {
@@ -203,13 +206,20 @@ Status BlobGCJob::DoRunGC() {
   // is_blob_index flag to GetImpl.
   std::unique_ptr<BlobFileHandle> blob_file_handle;
   std::unique_ptr<BlobFileBuilder> blob_file_builder;
-  std::unique_ptr<TableBuilder> shadow_builder;
-  std::unique_ptr<WritableFileWriter> shadow_file;
-  autovector<std::unique_ptr<TableBuilder>> level_shadow_builders;
-  autovector<std::unique_ptr<WritableFileWriter>> level_shadow_files;
-  // preallocate 7(max) levels for shadow builders
-  level_shadow_builders.resize(7);
-  level_shadow_files.resize(7);
+
+  ColumnFamilyData *cfd = blob_gc_->GetColumnFamilyData();
+  VersionStorageInfo* vstorage = cfd->current()->storage_info();
+  std::vector<std::unique_ptr<ShadowHandle>> shadow_handles(7);
+  // for (int i = 0; i < 7; i++) {
+  //   shadow_handles[i].reset();
+  // }
+
+  // std::vector<std::unique_ptr<TableBuilder>> level_shadow_builders;
+  // std::vector<std::unique_ptr<WritableFileWriter>> level_shadow_files;
+  // // preallocate 7(max) levels for shadow builders
+  // level_shadow_builders.resize(7);
+  // level_shadow_files.resize(7);
+
   //  uint64_t drop_entry_num = 0;
   //  uint64_t drop_entry_size = 0;
   //  uint64_t total_entry_num = 0;
@@ -250,26 +260,35 @@ Status BlobGCJob::DoRunGC() {
     bool discardable = false;
     int level = -1;
     // use bitset to check if blob is live
-    s = DiscardEntryWithBitset(blob_index, &discardable);
-    if (!s.ok()) {
-      break;
-    }
-    if (!discardable) {
-      // maybe valid, check again in LSM and get the level of valid key
+    if (blob_gc_->titan_cf_options().drop_key_bitset) {
+      s = DiscardEntryWithBitset(blob_index, &discardable);
+      if (!s.ok()) {
+        break;
+      }
+      if (!discardable) {
+        // maybe valid, check again in LSM and get the level of valid key
+        s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level);
+        if (!s.ok()) {
+          break;
+        }
+      }
+    } else {
       s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level);
       if (!s.ok()) {
         break;
       }
     }
+
     if (discardable) {
-      if (level == 0) {
-        std::cout << "L0 discardable" << std::endl;
-      }
+      // if (level == 0) {
+      //   std::cout << "L0 discardable" << std::endl;
+      // }
       metrics_.gc_num_keys_overwritten_check++;
       metrics_.gc_bytes_overwritten_check += blob_index.blob_handle.size;
       discardable_count++;
       continue;
     }
+    assert(level != -1);
     valid_count++;
     last_key_is_fresh = true;
 
@@ -335,72 +354,44 @@ Status BlobGCJob::DoRunGC() {
     BlobFileBuilder::OutContexts contexts;
     blob_file_builder->Add(blob_record, std::move(ctx), &contexts);
 
-    // peiqi: gc create sst
-    // rewrite valid key and blob index to shadow
-    // if (blob_gc_->titan_cf_options().rewrite_shadow) {
-    //   if (!shadow_builder) {
-    //     s = OpenGCOutputShadow(&shadow_builder, &shadow_file);
-    //     if (!s.ok()) {
-    //       break;
-    //     }
-    //     shadow_size = 0;
-    //   }
-    //   assert(shadow_builder);
-    //   s = AddToShadow(&shadow_builder, contexts);
-    //   if (!s.ok()) {
-    //     break;
-    //   }
-    //   shadow_size = shadow_builder->EstimatedFileSize();
-    //   if (shadow_size >= blob_gc_->titan_cf_options().shadow_target_size) {
-    //     s = shadow_builder->Finish();
-    //     if (!s.ok()) {
-    //       break;
-    //     }
-    //     shadow_builder.reset();
-    //     shadow_file.reset();
-    //   }
-    // } else {
-    //   // rewrite valid key and blob index to LSM
-    //   BatchWriteNewIndices(contexts, &s);
-    // }
-
     if (blob_gc_->titan_cf_options().rewrite_shadow) {
-      if (!level_shadow_builders[level]) {
-        s = OpenGCOutputShadow(&level_shadow_builders[level], &level_shadow_files[level], level);
+      if (shadow_handles[level] == nullptr) {
+        shadow_handles[level].reset(new ShadowHandle());
+        s = OpenGCOutputShadow(shadow_handles[level].get(), level);
         if (!s.ok()) {
           break;
         }
         shadow_size = 0;
       }
-      assert(level_shadow_builders[level]);
-      s = AddToShadow(&level_shadow_builders[level], contexts);
+      assert(shadow_handles[level]->shadow_builder);
+      assert(shadow_handles[level]->shadow_file);
+      s = AddToShadow(shadow_handles[level].get(), contexts);
       if (!s.ok()) {
         break;
       }
-      shadow_size = level_shadow_builders[level]->EstimatedFileSize();
+      shadow_size = shadow_handles[level]->shadow_builder->EstimatedFileSize();
       if (shadow_size >= blob_gc_->titan_cf_options().shadow_target_size) {
-        s = level_shadow_builders[level]->Finish();
+        s = FinishGCOutputShadow(shadow_handles[level].get(), level);
+        shadow_handles[level].reset();
         if (!s.ok()) {
           break;
         }
-        level_shadow_builders[level].reset();
-        level_shadow_files[level].reset();
       }
+
     } else {
       // rewrite valid key and blob index to LSM
       BatchWriteNewIndices(contexts, &s);
+      if (!s.ok()) {
+        break;
+      }
     }
 
-    if (!s.ok()) {
-      break;
-    }
   }
 
   TITAN_LOG_INFO(db_options_.info_log, "Titan GC total key count: %" PRIu64
                                        " valid key count: %" PRIu64
                                        " discardable key count: %" PRIu64,
                  total_count, valid_count, discardable_count);
-
 
   if (gc_iter->status().ok() && s.ok()) {
     if (blob_file_builder && blob_file_handle) {
@@ -415,77 +406,84 @@ Status BlobGCJob::DoRunGC() {
     return gc_iter->status();
   }
 
-  // if (blob_gc_->titan_cf_options().rewrite_shadow && shadow_builder) {
-  //     s = shadow_builder->Finish();
-  //     if (!s.ok()) {
-  //       return s;
-  //     }
-  //     shadow_builder.reset();
-  //     shadow_file.reset();
-  // }
-
   if (blob_gc_->titan_cf_options().rewrite_shadow) {
-    for (auto& builder : level_shadow_builders) {
-      if (builder) {
-        s = builder->Finish();
+    int level = 0;
+    for (auto& handle : shadow_handles) {
+      if (handle) {
+        s = FinishGCOutputShadow(handle.get(), level);
+        handle.reset();
         if (!s.ok()) {
-          return s;
+          break;
         }
-        builder.reset();
       }
-    }
-    for (auto& file : level_shadow_files) {
-      if (file) {
-        file.reset();
-      }
+      level++;
     }
   }    
 
   return s;
 }
 
-Status BlobGCJob::OpenGCOutputShadow(std::unique_ptr<TableBuilder> *builder, std::unique_ptr<WritableFileWriter> *file, int level) {
+Status BlobGCJob::OpenGCOutputShadow(ShadowHandle *handle, int level) {
   Status s;
-  uint64_t shadow_number = shadow_set_->NewFileNumber();
-  std::string shadow_name = shadow_set_->NewFileName(shadow_number) + "_" + std::to_string(level);
+  uint64_t shadow_number = base_db_impl_->GetVersionSet()->NewFileNumber();
+  std::string shadow_name = ShadowFileName(db_options_.dirname, shadow_number) + "_" + std::to_string(level);
   ColumnFamilyData *cfd = blob_gc_->GetColumnFamilyData();
-  std::unique_ptr<FSWritableFile> f;
+  
+  std::unique_ptr<FSWritableFile> writable_file;
+  
+  FileOptions fo_copy = FileOptions(env_options_);
+  Temperature temperature = Temperature::kUnknown;
+  fo_copy.temperature = temperature;
+
   s = env_->GetFileSystem()->NewWritableFile(
-      shadow_name, FileOptions(env_options_), &f, nullptr /*dbg*/);
+      shadow_name, FileOptions(env_options_), &writable_file, nullptr /*dbg*/);
   if (!s.ok()) return s;
 
-  f->SetIOPriority(Env::IOPriority::IO_LOW);
+
   auto& ioptions = *blob_gc_->GetColumnFamilyData()->ioptions();
   FileTypeSet tmp_set = ioptions.checksum_handoff_file_types;
+  writable_file->SetIOPriority(Env::IOPriority::IO_LOW);
+  writable_file->SetWriteLifeTimeHint(Env::WriteLifeTimeHint::WLTH_NOT_SET);
 
-  file->reset(new WritableFileWriter(std::move(f), shadow_name, FileOptions(env_options_), 
-        ioptions.clock, nullptr, ioptions.stats, ioptions.listeners,
-        ioptions.file_checksum_gen_factory.get(),
-        tmp_set.Contains(FileType::kTableFile), false));
+  handle->shadow_file.reset(new WritableFileWriter(std::move(writable_file), shadow_name, FileOptions(env_options_), 
+          ioptions.clock, io_tracer_, ioptions.stats, ioptions.listeners,
+          ioptions.file_checksum_gen_factory.get(),
+          tmp_set.Contains(FileType::kTableFile), false));
 
   TITAN_LOG_INFO(db_options_.info_log,
                  "Titan new GC shadow %" PRIu64 ".", shadow_number);
-  // {
-  //   //init shadow meta
-  //   FileMetaData meta;
-  //   meta.fd = FileDescriptor(shadow_number, -1, 0);
-  //   blob_gc_->GetOutputShadows().emplace_back(std::move(meta));
-  // }
+
+  int64_t temp_current_time = 0;
+  auto get_time_status = ioptions.clock->GetCurrentTime(&temp_current_time);
+  // Safe to proceed even if GetCurrentTime fails. So, log and proceed.
+  if (!get_time_status.ok()) {
+    TITAN_LOG_WARN(db_options_.info_log,
+                   "Failed to get current time. Status: %s",
+                   get_time_status.ToString().c_str());
+  }
+  uint64_t current_time = static_cast<uint64_t>(temp_current_time);
+  uint64_t oldest_ancester_time = current_time;
+  {
+    handle->shadow_meta.fd = FileDescriptor(shadow_number, 0/*0 also for shadow*/, 0);
+    handle->shadow_meta.oldest_ancester_time = oldest_ancester_time;
+    handle->shadow_meta.file_creation_time = current_time;
+    handle->shadow_meta.temperature = temperature;
+  }
 
   TableBuilderOptions tboptions(
       *cfd->ioptions(), *(cfd->GetLatestMutableCFOptions()),
       cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
       blob_gc_->titan_cf_options().blob_file_compression, blob_gc_->titan_cf_options().blob_file_compression_options, cfd->GetID(),
-      cfd->GetName(), -1, false, TableFileCreationReason::kShadow,
-      0, 0, 0, db_id_, db_session_id_, blob_gc_->titan_cf_options().shadow_target_size, shadow_number);
+      cfd->GetName(), level, false, TableFileCreationReason::kShadow,
+      oldest_ancester_time, 0, current_time, db_id_, db_session_id_, blob_gc_->titan_cf_options().shadow_target_size, shadow_number);
+  
+  handle->shadow_builder.reset(NewTableBuilder(tboptions, handle->shadow_file.get()));
 
-  builder->reset(NewTableBuilder(tboptions, file->get()));
-  assert(builder);
-  return s; 
+  return s;
 }
 
-Status BlobGCJob::AddToShadow(std::unique_ptr<TableBuilder> *builder, BlobFileBuilder::OutContexts& contexts) {
-  assert(builder);
+Status BlobGCJob::AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts& contexts) {
+  assert(handle->shadow_builder);
   Status s;
   for (const std::unique_ptr<BlobFileBuilder::BlobRecordContext>& ctx :
        contexts) {
@@ -501,23 +499,26 @@ Status BlobGCJob::AddToShadow(std::unique_ptr<TableBuilder> *builder, BlobFileBu
       return s;
     }
     InternalKey shadow_ikey(ikey.user_key, 1, kTypeBlobIndex);
-    builder->get()->Add(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry)); 
-    //blob_gc_->GetOutputShadows().back().UpdateBoundaries(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry), ikey.sequence, ikey.type);
+    handle->shadow_builder->Add(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry)); 
+    handle->shadow_meta.UpdateBoundaries(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry), ikey.sequence, ikey.type);
     if (!s.ok()) break;
   }
   return s;
 }
 
-Status BlobGCJob::FinishGCOutputShadow(std::unique_ptr<TableBuilder> *builder) {
+Status BlobGCJob::FinishGCOutputShadow(ShadowHandle *handle, int level) {
+  assert(handle);
   Status s;
-  if (builder) {
-    s = builder->get()->Finish();
-    if (!s.ok()) {
-      return s;
-    }
-    builder->reset();
+
+  shadow_metas_.emplace_back(std::make_pair(level, handle->shadow_meta));
+  s = handle->shadow_builder->Finish();
+  if (!s.ok()) {
+    return s;
   }
+  handle->shadow_builder.reset();
+  handle->shadow_file.reset();
   return s;
+
 }
 
 void BlobGCJob::BatchWriteNewIndices(BlobFileBuilder::OutContexts& contexts,
@@ -614,9 +615,9 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
   gopts.return_level = true;
   Status s = base_db_impl_->GetImpl(ReadOptions(), key, gopts);
   *level = gopts.level;
-  if (*level == 0) {
-    std::cout << "level 0" << std::endl;
-  }
+  // if (*level == 0) {
+  //   std::cout << "level 0" << std::endl;
+  // }
   if (!s.ok() && !s.IsNotFound()) {
     return s;
   }
@@ -692,10 +693,11 @@ Status BlobGCJob::Finish() {
 }
 
 Status BlobGCJob::InstallOutputShadows() {
+  //peiqi: how to update version?
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadows()");
-  for (auto& file : blob_gc_->GetOutputShadows()) {
-    shadow_set_->GetShadows().push_back(file);
-  }
+  shadow_mutex_->Lock();
+  shadow_set_->AddShadows(shadow_metas_);
+  shadow_mutex_->Unlock();
   return Status::OK();
 }
 

@@ -208,8 +208,7 @@ Status TitanDBImpl::BackgroundGC(LogBuffer* log_buffer,
                     TITAN_GC_MICROS);
     BlobGCJob blob_gc_job(blob_gc.get(), db_, &mutex_, db_options_, env_,
                           env_options_, blob_manager_.get(),
-                          blob_file_set_.get(), shadow_set_.get(), log_buffer, &shuting_down_,
-                          stats_.get(), db_id_, db_session_id_);
+                          blob_file_set_.get(), log_buffer, &shuting_down_, stats_.get(), dbname_, db_id_, db_session_id_, shadow_mutex_, shadow_set_); 
     s = blob_gc_job.Prepare();
     if (s.ok()) {
       mutex_.Unlock();

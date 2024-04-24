@@ -10,7 +10,7 @@
 #include "table_factory.h"
 #include "titan/db.h"
 #include "titan_stats.h"
-#include "shadow_set.h"
+#include "db/shadow_set.h"
 
 namespace rocksdb {
 namespace titandb {
@@ -295,6 +295,8 @@ class TitanDBImpl : public TitanDB {
   DBImpl* db_impl_;
   std::string db_id_;
   std::string db_session_id_;
+  port::Mutex* shadow_mutex_;
+  ShadowSet* shadow_set_;
   TitanDBOptions db_options_;
   std::unique_ptr<Directory> directory_;
 
@@ -321,7 +323,6 @@ class TitanDBImpl : public TitanDB {
   std::unique_ptr<RepeatableThread> thread_dump_stats_;
 
   std::unique_ptr<BlobFileSet> blob_file_set_;
-  std::unique_ptr<ShadowSet> shadow_set_;
   std::set<uint64_t> pending_outputs_;
   std::shared_ptr<BlobFileManager> blob_manager_;
 

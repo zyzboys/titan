@@ -10,7 +10,7 @@ extern long countforzeta; //initialized in init_zipf_generator function
 extern long lastVal; //initialized in setLastValue
 
 
-void init_zipf_generator(double zipfian_coef, long min, long max);
+void init_zipf_generator(long min, long max, double zipfian_coef);
 double zeta(long st, long n, double initialsum);
 double zetastatic(long st, long n, double initialsum);
 long nextLong(long itemcount);

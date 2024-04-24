@@ -23,7 +23,7 @@ double zeta2theta; //initialized in init_zipf_generator function
 long countforzeta; //initialized in init_zipf_generator function
 long lastVal; //initialized in setLastValue
 
-void init_zipf_generator(double zipfian_coef, long min, long max){
+void init_zipf_generator(long min, long max, double zipfian_coef){
 	items = max-min+1;
 	baseZipf = min;
 	zipfianconstant = zipfian_coef;

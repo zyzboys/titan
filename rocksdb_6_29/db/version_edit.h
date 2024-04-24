@@ -162,10 +162,28 @@ struct FileSampledStats {
   mutable std::atomic<uint64_t> num_reads_sampled;
 };
 
+struct FileMetaData;
+struct GuardMetaData {
+  int refs;
+  int level;
+  bool is_sentinel;
+  uint64_t number_segments;
+  InternalKey guard_key; // guard key is selected before any keys are inserted
+  /* Need not be same as guard_key. Ex: g: 100, smallest: 102 */
+  InternalKey smallest; 
+  InternalKey largest;   // Largest internal key served by table
+  // The list of file numbers that form a part of this guard.
+  std::vector<uint64_t> files;
+  std::vector<FileMetaData*> file_metas;
+  
+  GuardMetaData() : refs(0), level(-1), is_sentinel(false), guard_key(), smallest(), largest(), number_segments(0) { files.clear();}
+};
+
 struct FileMetaData {
   FileDescriptor fd;
   InternalKey smallest;            // Smallest internal key served by table
   InternalKey largest;             // Largest internal key served by table
+  GuardMetaData* guard = nullptr;  // Only shadow has guard
 
   // Needs to be disposed when refs becomes 0.
   Cache::Handle* table_reader_handle = nullptr;
