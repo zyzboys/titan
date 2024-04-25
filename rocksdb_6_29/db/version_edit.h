@@ -13,6 +13,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <boost/dynamic_bitset.hpp>
 
 #include "db/blob/blob_file_addition.h"
 #include "db/blob/blob_file_garbage.h"
@@ -162,33 +163,36 @@ struct FileSampledStats {
   mutable std::atomic<uint64_t> num_reads_sampled;
 };
 
-struct FileMetaData;
-struct GuardMetaData {
-  int refs;
-  int level;
-  bool is_sentinel;
-  uint64_t number_segments;
-  InternalKey guard_key; // guard key is selected before any keys are inserted
-  /* Need not be same as guard_key. Ex: g: 100, smallest: 102 */
-  InternalKey smallest; 
-  InternalKey largest;   // Largest internal key served by table
-  // The list of file numbers that form a part of this guard.
-  std::vector<uint64_t> files;
-  std::vector<FileMetaData*> file_metas;
+// struct FileMetaData;
+// struct GuardMetaData {
+//   int refs;
+//   int level;
+//   bool is_sentinel;
+//   uint64_t number_segments;
+//   InternalKey guard_key; // guard key is selected before any keys are inserted
+//   /* Need not be same as guard_key. Ex: g: 100, smallest: 102 */
+//   InternalKey smallest; 
+//   InternalKey largest;   // Largest internal key served by table
+//   // The list of file numbers that form a part of this guard.
+//   std::vector<uint64_t> files;
+//   std::vector<FileMetaData*> file_metas;
   
-  GuardMetaData() : refs(0), level(-1), is_sentinel(false), guard_key(), smallest(), largest(), number_segments(0) { files.clear();}
-};
+//   GuardMetaData() : refs(0), level(-1), is_sentinel(false), guard_key(), smallest(), largest(), number_segments(0) { files.clear();}
+// };
 
 struct FileMetaData {
   FileDescriptor fd;
   InternalKey smallest;            // Smallest internal key served by table
   InternalKey largest;             // Largest internal key served by table
-  GuardMetaData* guard = nullptr;  // Only shadow has guard
+  //GuardMetaData* guard = nullptr;  // Only shadow has guard
+  bool is_shadow = false;          // Is this file a shadow file
 
   // Needs to be disposed when refs becomes 0.
   Cache::Handle* table_reader_handle = nullptr;
 
   FileSampledStats stats;
+
+  boost::dynamic_bitset<> live_data_bitset_;
 
   // Stats for compensating deletion entries during compaction
 
@@ -260,6 +264,27 @@ struct FileMetaData {
         min_timestamp(std::move(_min_timestamp)),
         max_timestamp(std::move(_max_timestamp)) {
     TEST_SYNC_POINT_CALLBACK("FileMetaData::FileMetaData", this);
+  }
+
+  void InitLiveDataBitset(uint64_t size) {
+    live_data_bitset_.resize(size, true);
+  }
+  void SetLiveDataBitset(uint64_t offset, bool val) {
+    live_data_bitset_.set(offset, val);
+  }
+  bool IsLiveData(uint64_t offset) {
+    return live_data_bitset_.test(offset); 
+  }
+  uint64_t GetLiveDataBitsetSize() {
+    return live_data_bitset_.size();
+  }
+
+  uint64_t GetLiveDataSize() {
+    return live_data_bitset_.count();
+  }
+
+  boost::dynamic_bitset<> *GetLiveDataBitset() {
+    return &live_data_bitset_;
   }
 
   // REQUIRED: Keys must be given to the function in sorted order (it expects

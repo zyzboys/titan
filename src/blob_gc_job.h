@@ -26,7 +26,7 @@ class BlobGCJob {
                      BlobFileManager* blob_file_manager,
                      BlobFileSet* blob_file_set, LogBuffer* log_buffer,
                      std::atomic_bool* shuting_down, TitanStats* stats, std::string& dbname, std::string& db_id, 
-                     std::string& db_session_id, port::Mutex* shadow_mutex, ShadowSet* shadow_set);
+                     std::string& db_session_id, ShadowSet* shadow_set);
   
   BlobGCJob(BlobGC *blob_gc, DB *db, port::Mutex *mutex,
             const TitanDBOptions &titan_db_options, Env *env,
@@ -60,7 +60,6 @@ class BlobGCJob {
   const std::string db_id_;
   const std::string db_session_id_;
   std::shared_ptr<IOTracer> io_tracer_ = nullptr;
-  port::Mutex *shadow_mutex_;
   ShadowSet *shadow_set_;
 
   port::Mutex *mutex_;

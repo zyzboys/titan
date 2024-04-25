@@ -1516,9 +1516,8 @@ struct DBWithColumnFamilies {
   port::Mutex create_cf_mutex;  // Only one thread can execute CreateNewCf()
   std::vector<int> cfh_idx_to_prob;  // ith index holds probability of operating
                                      // on cfh[i].
-
-      : db(nullptr)
   DBWithColumnFamilies()
+      : db(nullptr)
 #ifndef ROCKSDB_LITE
         ,
         opt_txn_db(nullptr)

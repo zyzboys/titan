@@ -955,8 +955,6 @@ class DBImpl : public DB {
 
   InstrumentedMutex* mutex() const { return &mutex_; }
 
-  port::Mutex* shadow_mutex()  {return &shadow_mutex_;}
-
   // Initialize a brand new DB. The DB directory is expected to be empty before
   // calling it. Push new manifest file name into `new_filenames`.
   Status NewDB(std::vector<std::string>* new_filenames);
@@ -1225,7 +1223,6 @@ class DBImpl : public DB {
   InstrumentedMutex trace_mutex_;
   BlockCacheTracer block_cache_tracer_;
 
-  mutable port::Mutex shadow_mutex_; //protect一些会被compaction和gc同时更新的东西，目前是考虑单线程compaction单线程gc
   std::unique_ptr<ShadowSet> shadow_set_;
 
   // State below is protected by mutex_

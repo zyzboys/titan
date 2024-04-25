@@ -313,7 +313,6 @@ Status TitanDBImpl::OpenImpl(const std::vector<TitanCFDescriptor>& descs,
   db_impl_ = reinterpret_cast<DBImpl*>(db_->GetRootDB());
   db_impl_->GetDbIdentity(db_id_);
   db_impl_->GetDbSessionId(db_session_id_);
-  shadow_mutex_ = db_impl_->shadow_mutex();
   shadow_set_ = db_impl_->GetShadowSet();
   assert(db_ != nullptr);
   assert(handles->size() == descs.size());

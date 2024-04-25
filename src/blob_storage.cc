@@ -217,7 +217,9 @@ void BlobStorage::ComputeGCScore() {
       // more invalid data
       gcs.score = cf_options_.blob_file_discardable_ratio;
     } else {
-      gcs.score = file.second->GetDiscardableRatio();
+      //gcs.score = file.second->GetDiscardableRatio();
+      //use bitset to calculate the score
+      gcs.score = 1 - (file.second->GetLiveDataSize() / file.second->GetLiveDataBitsetSize());
     }
   }
 

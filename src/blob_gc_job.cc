@@ -88,7 +88,7 @@ BlobGCJob::BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
                      BlobFileManager* blob_file_manager,
                      BlobFileSet* blob_file_set, LogBuffer* log_buffer,
                      std::atomic_bool* shuting_down, TitanStats* stats, std::string& dbname, 
-                     std::string& db_id, std::string& db_session_id, port::Mutex* shadow_mutex, ShadowSet* shadow_set)
+                     std::string& db_id, std::string& db_session_id, ShadowSet* shadow_set)
     : blob_gc_(blob_gc),
       base_db_(db),
       base_db_impl_(reinterpret_cast<DBImpl*>(base_db_)),
@@ -104,7 +104,6 @@ BlobGCJob::BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
       dbname_(dbname),
       db_id_(db_id),
       db_session_id_(db_session_id),
-      shadow_mutex_(shadow_mutex),
       shadow_set_(shadow_set) {}
 
 BlobGCJob::BlobGCJob(BlobGC* blob_gc, DB* db, port::Mutex* mutex,
@@ -451,7 +450,7 @@ Status BlobGCJob::OpenGCOutputShadow(ShadowHandle *handle, int level) {
           tmp_set.Contains(FileType::kTableFile), false));
 
   TITAN_LOG_INFO(db_options_.info_log,
-                 "Titan new GC shadow %" PRIu64 ".", shadow_number);
+                 "Titan open new GC shadow %" PRIu64 ".", shadow_number);
 
   int64_t temp_current_time = 0;
   auto get_time_status = ioptions.clock->GetCurrentTime(&temp_current_time);
@@ -465,6 +464,7 @@ Status BlobGCJob::OpenGCOutputShadow(ShadowHandle *handle, int level) {
   uint64_t oldest_ancester_time = current_time;
   {
     handle->shadow_meta.fd = FileDescriptor(shadow_number, 0/*0 also for shadow*/, 0);
+    handle->shadow_meta.is_shadow = true;
     handle->shadow_meta.oldest_ancester_time = oldest_ancester_time;
     handle->shadow_meta.file_creation_time = current_time;
     handle->shadow_meta.temperature = temperature;
@@ -509,14 +509,42 @@ Status BlobGCJob::AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts
 Status BlobGCJob::FinishGCOutputShadow(ShadowHandle *handle, int level) {
   assert(handle);
   Status s;
-
-  shadow_metas_.emplace_back(std::make_pair(level, handle->shadow_meta));
   s = handle->shadow_builder->Finish();
   if (!s.ok()) {
     return s;
   }
+  IOStatus io_s = handle->shadow_builder->io_status();
+  s = io_s;
+  
+  if (s.ok()) {
+    handle->shadow_meta.InitLiveDataBitset(handle->shadow_builder->NumEntries());
+    handle->shadow_meta.fd.file_size = handle->shadow_builder->FileSize();
+  }
+  
+  if (s.ok()) {
+    io_s = handle->shadow_file->Sync(db_options_.use_fsync);
+  }
+
+  if (s.ok() && io_s.ok()) {
+    io_s = handle->shadow_file->Close();
+  }
+
+  if (s.ok() && io_s.ok()) {
+    handle->shadow_meta.file_checksum = handle->shadow_file->GetFileChecksum();
+    handle->shadow_meta.file_checksum_func_name = handle->shadow_file->GetFileChecksumFuncName();
+  }
+
+  TITAN_LOG_INFO(db_options_.info_log,
+                     "Titan adding shadow file [%" PRIu64 "] range [%s, %s]",
+                     handle->shadow_meta.fd.GetNumber(),
+                     handle->shadow_meta.smallest.user_key().ToString(true).c_str(),
+                     handle->shadow_meta.largest.user_key().ToString(true).c_str());
+
+  shadow_metas_.emplace_back(std::make_pair(level, handle->shadow_meta));
+  
   handle->shadow_builder.reset();
   handle->shadow_file.reset();
+  
   return s;
 
 }
@@ -695,9 +723,7 @@ Status BlobGCJob::Finish() {
 Status BlobGCJob::InstallOutputShadows() {
   //peiqi: how to update version?
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadows()");
-  shadow_mutex_->Lock();
   shadow_set_->AddShadows(shadow_metas_);
-  shadow_mutex_->Unlock();
   return Status::OK();
 }
 

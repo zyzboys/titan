@@ -39,8 +39,6 @@ class BlobGC {
 
   void ReleaseGcFiles();
 
-  void AddOutputShadow(FileMetaData*);
-
   bool trigger_next() { return trigger_next_; }
 
 

@@ -271,6 +271,9 @@ class BlobFileMeta {
   uint64_t GetLiveDataBitsetSize() {
     return live_data_bitset_.size();
   }
+  uint64_t GetLiveDataSize() {
+    return live_data_bitset_.count();
+  }
   boost::dynamic_bitset<> *GetLiveDataBitset() {
     return &live_data_bitset_;
   }

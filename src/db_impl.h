@@ -295,7 +295,6 @@ class TitanDBImpl : public TitanDB {
   DBImpl* db_impl_;
   std::string db_id_;
   std::string db_session_id_;
-  port::Mutex* shadow_mutex_;
   ShadowSet* shadow_set_;
   TitanDBOptions db_options_;
   std::unique_ptr<Directory> directory_;
