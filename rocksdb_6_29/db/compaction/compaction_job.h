@@ -217,6 +217,7 @@ class CompactionJob {
   Env::Priority thread_pri_;
   std::string full_history_ts_low_;
   BlobFileCompletionCallback* blob_callback_;
+  ShadowSet* shadow_set_;
 
   uint64_t GetCompactionId(SubcompactionState* sub_compact);
 

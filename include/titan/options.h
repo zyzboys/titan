@@ -166,6 +166,8 @@ struct TitanCFOptions : public ColumnFamilyOptions {
   // Default: false
   bool rewrite_shadow{false};
 
+  bool shadow_cache{false};
+
   // If set true, Titan will first check bitset when GC
   bool drop_key_bitset{false};
 

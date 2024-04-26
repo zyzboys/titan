@@ -79,7 +79,8 @@ LIB_SOURCES =                                                   \
   db/version_edit.cc                                            \
   db/version_edit_handler.cc                                    \
   db/version_set.cc                                             \
-  db/shadow_set.cc
+  db/shadow_set.cc                                              \
+  db/titan_blob_format.cc                                       \
   db/wal_edit.cc                                                \
   db/wal_manager.cc                                             \
   db/write_batch.cc                                             \

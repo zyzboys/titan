@@ -40,7 +40,38 @@ void ShadowSet::AddShadows(std::vector<std::pair<int, FileMetaData>>& shadows) {
   void ShadowSet::ComputeShadowScore() {
     MutexLock l(&shadow_mutex_);    
     shadow_scores_.clear();
-    
+  }
+
+  void ShadowSet::AddCache(std::unordered_map<std::string, std::string>& cache_addition) {
+    MutexLock l(&shadow_mutex_);
+    fprintf(stderr, "Add cache begin, cache size: %d\n", shadow_cache_.size());
+    for (auto& cache : cache_addition) {
+      shadow_cache_[cache.first] = cache.second;
+    }
+    fprintf(stderr, "Add cache done, cache size: %d\n", shadow_cache_.size());
+  }
+
+  void ShadowSet::DeleteCache(std::unordered_map<std::string, std::string>& cache_deletion) {
+    MutexLock l(&shadow_mutex_);
+    for (auto& cache : cache_deletion) {
+      TitanBlobIndex delete_blob_index;
+      Slice delete_slice(cache.second);
+      delete_blob_index.DecodeFrom(&delete_slice);
+      auto it = shadow_cache_.find(cache.first);
+      if (it != shadow_cache_.end()) {
+        TitanBlobIndex blob_index;
+        Slice original_slice(it->second);
+        blob_index.DecodeFrom(&original_slice);
+        // make sure we only delete the shadow cache that is older or equal than the new one
+        if (blob_index.file_number <= delete_blob_index.file_number) {
+          shadow_cache_.erase(it);
+        }
+      }     
+    }
+  }
+
+  bool ShadowSet::KeyExistInCache(const std::string& key) const {
+    return shadow_cache_.find(key) != shadow_cache_.end();
   }
 
 

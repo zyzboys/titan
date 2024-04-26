@@ -14,6 +14,7 @@
 #include "titan/options.h"
 #include "titan_stats.h"
 #include "version_edit.h"
+#include "util/hash.h"
 
 namespace rocksdb {
 namespace titandb {
@@ -68,9 +69,6 @@ class BlobGCJob {
   EnvOptions env_options_;
   BlobFileManager *blob_file_manager_;
   BlobFileSet *blob_file_set_;
-  //ShadowSet *shadow_set_;
-  // std::string db_id_;
-  // std::string db_session_id_;
   LogBuffer *log_buffer_{nullptr};
 
   std::vector<std::pair<std::unique_ptr<BlobFileHandle>,
@@ -78,6 +76,8 @@ class BlobGCJob {
       blob_file_builders_;
   
   std::vector<std::pair<int, FileMetaData>> shadow_metas_;
+  std::unordered_map<std::string, std::string> cache_addition_;
+  uint64_t add_cache_count_ = 0;
   std::vector<std::pair<WriteBatch, GarbageCollectionWriteCallback>>
       rewrite_batches_;
 
@@ -117,10 +117,12 @@ class BlobGCJob {
                       bool *discardable, int *level);
   Status DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable);
   Status InstallOutputShadows();
+  Status InstallOutputShadowCache();
   Status InstallOutputBlobFiles();
   Status RewriteValidKeyToLSM();
   Status OpenGCOutputShadow(ShadowHandle *handle, int level);
   Status AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts& contexts);
+  Status AddToShadowCache(BlobFileBuilder::OutContexts& contexts);
   Status FinishGCOutputShadow(ShadowHandle *handle, int level);
   Status DeleteInputBlobFiles();
 

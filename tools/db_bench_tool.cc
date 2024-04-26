@@ -827,6 +827,8 @@ DEFINE_bool(titan_rewrite_shadow, false,
 DEFINE_uint64(titan_shadow_target_size, 4 * 1024 * 1024, 
               "The desirable shadow size. This is not a hard limit but a wish.");
 
+DEFINE_bool(titan_shadow_cache, false, "Enable shadow cache in Titan.");
+
 #endif  // ROCKSDB_LITE
 
 DEFINE_bool(report_bg_io_stats, false,
@@ -3267,14 +3269,14 @@ class Benchmark {
     shared.num_initialized = 0;
     shared.num_done = 0;
     shared.start = false;
-    if (FLAGS_use_existing_db > 0 && (method == &Benchmark::UpdateRandom || method == &Benchmark::WriteRandom)) {
-      std::string key_indb_file = FLAGS_db + "_key_indb";
-      std::ifstream file(key_indb_file);
-      for (std::string line; std::getline(file, line);) {
-        shared.key_indb.insert(line);
-      }
-      file.close();
-    }
+    // if (FLAGS_use_existing_db > 0 && (method == &Benchmark::UpdateRandom || method == &Benchmark::WriteRandom)) {
+    //   std::string key_indb_file = FLAGS_db + "_key_indb";
+    //   std::ifstream file(key_indb_file);
+    //   for (std::string line; std::getline(file, line);) {
+    //     shared.key_indb.insert(line);
+    //   }
+    //   file.close();
+    // }
     if (FLAGS_benchmark_write_rate_limit > 0) {
       shared.write_rate_limiter.reset(
           NewGenericRateLimiter(FLAGS_benchmark_write_rate_limit));
@@ -3978,6 +3980,7 @@ class Benchmark {
     opts->disable_background_gc = FLAGS_titan_disable_background_gc;
     opts->max_background_gc = FLAGS_titan_max_background_gc;
     opts->rewrite_shadow = FLAGS_titan_rewrite_shadow;
+    opts->shadow_cache = FLAGS_titan_shadow_cache;
     opts->drop_key_bitset = FLAGS_titan_drop_key_bitset;
     opts->shadow_target_size = FLAGS_titan_shadow_target_size;
     //opts->min_gc_batch_size = 128 << 20;
@@ -4428,8 +4431,8 @@ class Benchmark {
       if (!use_blob_db_) {
         s = db_with_cfh->db->Write(write_options_, &batch);
       }
-      thread->shared->key_indb.insert(key.ToString());
-      thread->stats.FinishKeyIndb(thread->shared->key_indb.size());
+      // thread->shared->key_indb.insert(key.ToString());
+      // thread->stats.FinishKeyIndb(thread->shared->key_indb.size());
       thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
                                 entries_per_batch_, kWrite);
       if (FLAGS_sine_write_rate) {
@@ -4462,13 +4465,13 @@ class Benchmark {
         exit(1);
       }
     }
-    std::string key_indb_file = FLAGS_db + "_key_indb";
-    std::ofstream file(key_indb_file);
-    for (auto iter = thread->shared->key_indb.begin();
-         iter != thread->shared->key_indb.end(); iter++) {
-      file << *iter << std::endl;
-    }
-    file.close();
+    // std::string key_indb_file = FLAGS_db + "_key_indb";
+    // std::ofstream file(key_indb_file);
+    // for (auto iter = thread->shared->key_indb.begin();
+    //      iter != thread->shared->key_indb.end(); iter++) {
+    //   file << *iter << std::endl;
+    // }
+    // file.close();
     thread->stats.AddBytes(bytes);
   }
 
@@ -5887,17 +5890,17 @@ class Benchmark {
         exit(1);
       }
       bytes += key.size() + value_size_;
-      thread->shared->key_indb.insert(key.ToString());
-      thread->stats.FinishKeyIndb(thread->shared->key_indb.size());
+      // thread->shared->key_indb.insert(key.ToString());
+      // thread->stats.FinishKeyIndb(thread->shared->key_indb.size());
       thread->stats.FinishedOps(nullptr, db, 1, kUpdate);
     }
-    std::string key_indb_file = FLAGS_db + "_key_indb";
-    std::ofstream file(key_indb_file);
-    for (auto iter = thread->shared->key_indb.begin();
-         iter != thread->shared->key_indb.end(); iter++) {
-      file << *iter << std::endl;
-    }
-    file.close();
+    // std::string key_indb_file = FLAGS_db + "_key_indb";
+    // std::ofstream file(key_indb_file);
+    // for (auto iter = thread->shared->key_indb.begin();
+    //      iter != thread->shared->key_indb.end(); iter++) {
+    //   file << *iter << std::endl;
+    // }
+    // file.close();
     char msg[100];
     snprintf(msg, sizeof(msg), "( updates:%" PRIu64 " found:%" PRIu64 ")",
              readwrites_, found);

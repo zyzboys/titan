@@ -1,11 +1,16 @@
 #pragma once
 
+#include <unordered_map>
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
+#include "blob_format.h"
+#include "db/titan_blob_format.h"
+
 
 #define LSM_MAX_LEVEL 7
 
 namespace ROCKSDB_NAMESPACE {
+
 
 struct ShadowHandle {
     FileMetaData shadow_meta;
@@ -18,6 +23,12 @@ struct ShadowHandle {
 struct ShadowScore {
   uint64_t shadow_number;
   double score;
+};
+
+struct ShadowCacheCompare {
+  bool operator()(const std::string& a, const std::string& b) const {
+    return BytewiseComparator()->Compare(Slice(a), Slice(b)) < 0;
+  }
 };
 
 // ShadowSet is the set of all the shadows generated during Titan GC.
@@ -40,11 +51,13 @@ public:
 
   void ComputeShadowScore();
 
+  void AddCache(std::unordered_map<std::string, std::string>& cache_addition);
 
-  // void AddGuard(GuardMetaData* g, int level) {
-  //   assert(level >=0 && level < LSM_MAX_LEVEL);
-  //   guards_[level].emplace_back(g);
-  // }
+  void DeleteCache(std::unordered_map<std::string, std::string>& cache_deletion);
+
+  bool KeyExistInCache(const std::string& key) const;
+
+
 
 
   class FileLocation {
@@ -77,6 +90,8 @@ public:
   mutable port::Mutex shadow_mutex_; //protect一些会被compaction和gc同时更新的东西，目前是考虑单线程compaction单线程gc
   std::vector<FileMetaData*> shadow_files_[LSM_MAX_LEVEL];
   std::vector<ShadowScore> shadow_scores_;
+  // userkey-><value>
+  std::map<std::string, std::string, ShadowCacheCompare> shadow_cache_;
   // List of guards per level which are persisted to disk and already committed to a MANIFEST
   //std::vector<GuardMetaData*> guards_[LSM_MAX_LEVEL];
   std::unordered_map<uint64_t, FileLocation> file_locations_;

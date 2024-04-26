@@ -475,6 +475,7 @@ CompactionJob::CompactionJob(
                                     db_options_.enable_thread_tracking);
   ThreadStatusUtil::SetThreadOperation(ThreadStatus::OP_COMPACTION);
   ReportStartedCompaction(compaction);
+  shadow_set_ = compaction->GetShadowSet();
 }
 
 CompactionJob::~CompactionJob() {
@@ -1422,12 +1423,17 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
           ? nullptr
           : sub_compact->compaction->CreateSstPartitioner();
   std::string last_key_for_partitioner;
-
+  uint64_t compaction_check_key = 0;
+  uint64_t shadow_invalid_key = 0;
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
     const Slice& value = c_iter->value();
+    compaction_check_key++;
+    if (shadow_set_->KeyExistInCache(c_iter->user_key().ToString())) {
+      shadow_invalid_key++;
+    }
 
     assert(!end ||
            cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
@@ -1520,6 +1526,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                         &sub_compact->compaction_job_stats);
     }
   }
+  fprintf(stderr, "compaction_check_key: %lu, shadow_invalid_key: %lu, still_valid_key: %lu\n", compaction_check_key, shadow_invalid_key, compaction_check_key - shadow_invalid_key);
 
   sub_compact->compaction_job_stats.num_blobs_read =
       c_iter_stats.num_blobs_read;

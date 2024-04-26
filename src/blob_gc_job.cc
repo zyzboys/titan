@@ -353,6 +353,11 @@ Status BlobGCJob::DoRunGC() {
     BlobFileBuilder::OutContexts contexts;
     blob_file_builder->Add(blob_record, std::move(ctx), &contexts);
 
+    if (blob_gc_->titan_cf_options().shadow_cache) {
+      // Add to shadow cache
+      AddToShadowCache(contexts);
+    }
+
     if (blob_gc_->titan_cf_options().rewrite_shadow) {
       if (shadow_handles[level] == nullptr) {
         shadow_handles[level].reset(new ShadowHandle());
@@ -377,8 +382,9 @@ Status BlobGCJob::DoRunGC() {
         }
       }
 
-    } else {
-      // rewrite valid key and blob index to LSM
+    }
+
+    if (!blob_gc_->titan_cf_options().rewrite_shadow && !blob_gc_->titan_cf_options().shadow_cache) {
       BatchWriteNewIndices(contexts, &s);
       if (!s.ok()) {
         break;
@@ -549,6 +555,28 @@ Status BlobGCJob::FinishGCOutputShadow(ShadowHandle *handle, int level) {
 
 }
 
+Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts) {
+  Status s;
+  for (const std::unique_ptr<BlobFileBuilder::BlobRecordContext>& ctx :
+       contexts) {
+    BlobIndex blob_index;
+    blob_index.file_number = ctx->new_blob_index.file_number;
+    blob_index.blob_handle = ctx->new_blob_index.blob_handle;
+
+    std::string index_entry;
+    blob_index.EncodeTo(&index_entry);
+    ParsedInternalKey ikey;
+    s = ParseInternalKey(ctx->key, &ikey, false /*log_err_key*/);
+    if (!s.ok()) {
+      return s;
+    }
+    cache_addition_[ikey.user_key.ToString()] = index_entry;
+    add_cache_count_++;
+  }
+  return s;
+
+}
+
 void BlobGCJob::BatchWriteNewIndices(BlobFileBuilder::OutContexts& contexts,
                                      Status* s) {
   auto* cfh = blob_gc_->column_family_handle();
@@ -679,21 +707,29 @@ Status BlobGCJob::Finish() {
     // rewrite_shadow is false, rewrite to LSM
     if (s.ok()) {
       TEST_SYNC_POINT("BlobGCJob::Finish::BeforeRewriteValidKeyToLSM");
-      // peiqi: critical path
-      if (!blob_gc_->titan_cf_options().rewrite_shadow) {
-        s = RewriteValidKeyToLSM();
-        if (!s.ok()) {
-          TITAN_LOG_ERROR(db_options_.info_log,
-                          "[%s] GC job failed to rewrite keys to LSM: %s",
-                          blob_gc_->column_family_handle()->GetName().c_str(),
-                          s.ToString().c_str());
-        }
-      } else {
-        // rewrite_shadow is true, install output shadows
+      if (blob_gc_->titan_cf_options().rewrite_shadow) {
         s = InstallOutputShadows();
         if (!s.ok()) {
           TITAN_LOG_ERROR(db_options_.info_log,
                           "[%s] GC job failed to install output shadows: %s",
+                          blob_gc_->column_family_handle()->GetName().c_str(),
+                          s.ToString().c_str());
+        }
+      }
+      if (blob_gc_->titan_cf_options().shadow_cache) {
+        s = InstallOutputShadowCache();
+        if (!s.ok()) {
+          TITAN_LOG_ERROR(db_options_.info_log,
+                          "[%s] GC job failed to install output shadow cache: %s",
+                          blob_gc_->column_family_handle()->GetName().c_str(),
+                          s.ToString().c_str());
+        }
+      }
+      if (!blob_gc_->titan_cf_options().rewrite_shadow && !blob_gc_->titan_cf_options().shadow_cache) {
+        s = RewriteValidKeyToLSM();
+        if (!s.ok()) {
+          TITAN_LOG_ERROR(db_options_.info_log,
+                          "[%s] GC job failed to rewrite keys to LSM: %s",
                           blob_gc_->column_family_handle()->GetName().c_str(),
                           s.ToString().c_str());
         }
@@ -725,6 +761,14 @@ Status BlobGCJob::InstallOutputShadows() {
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadows()");
   shadow_set_->AddShadows(shadow_metas_);
   return Status::OK();
+}
+
+Status BlobGCJob::InstallOutputShadowCache() {
+  TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadowCache()");
+  Status s;
+  fprintf(stderr, "add cache count: %d, cache_addition size:%d \n", add_cache_count_, cache_addition_.size());
+  shadow_set_->AddCache(cache_addition_);
+  return s;
 }
 
 Status BlobGCJob::InstallOutputBlobFiles() {

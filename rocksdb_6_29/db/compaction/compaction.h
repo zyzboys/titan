@@ -13,6 +13,7 @@
 #include "options/cf_options.h"
 #include "rocksdb/sst_partitioner.h"
 #include "util/autovector.h"
+#include "db/shadow_set.h"
 
 namespace ROCKSDB_NAMESPACE {
 // The file contains class Compaction, as well as some helper functions
@@ -320,6 +321,10 @@ class Compaction {
     return notify_on_compaction_completion_;
   }
 
+  void SetShadowSet(ShadowSet* shadow_set) { shadow_set_ = shadow_set; }
+
+  ShadowSet* GetShadowSet() { return shadow_set_; }
+
  private:
   // mark (or clear) all files that are being compacted
   void MarkFilesBeingCompacted(bool mark_as_compacted);
@@ -409,6 +414,8 @@ class Compaction {
   // Notify on compaction completion only if listener was notified on compaction
   // begin.
   bool notify_on_compaction_completion_;
+
+  ShadowSet* shadow_set_;
 };
 
 // Return sum of sizes of all files in `files`.
