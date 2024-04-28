@@ -476,6 +476,7 @@ CompactionJob::CompactionJob(
   ThreadStatusUtil::SetThreadOperation(ThreadStatus::OP_COMPACTION);
   ReportStartedCompaction(compaction);
   shadow_set_ = compaction->GetShadowSet();
+  cache_deletion_ = compaction_job_stats->cache_deletion;
 }
 
 CompactionJob::~CompactionJob() {
@@ -1424,17 +1425,13 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
           : sub_compact->compaction->CreateSstPartitioner();
   std::string last_key_for_partitioner;
   uint64_t compaction_check_key = 0;
-  uint64_t shadow_invalid_key = 0;
+  uint64_t key_in_cache = 0;
+  uint64_t invalid_by_seq = 0;
+  uint64_t success_merge = 0;
+  uint64_t outdated_shadow = 0;
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
-    const Slice& key = c_iter->key();
-    const Slice& value = c_iter->value();
-    compaction_check_key++;
-    if (shadow_set_->KeyExistInCache(c_iter->user_key().ToString())) {
-      shadow_invalid_key++;
-    }
-
     assert(!end ||
            cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
 
@@ -1453,6 +1450,43 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       }
       c_iter->SetTableBuilder(sub_compact->builder.get());
     }
+
+    Slice value_copy = c_iter->value();
+
+    compaction_check_key++;
+    SequenceNumber cache_seq = 0;
+    std::string cache_value;
+    if (c_iter->ikey().type == kTypeBlobIndex) {
+      if (shadow_set_->GetShadowCache()->KeyExist(c_iter->user_key().ToString(), &cache_seq, cache_value)) {
+        key_in_cache++;
+        //key exist in cache
+        //fprintf(stderr, "seq: %lu, cache_seq: %lu\n", c_iter->ikey().sequence, cache_seq);
+        if (cache_seq > c_iter->ikey().sequence) {
+          //shadow key is newer, it means upper level has newer version of this key, drop it!
+          invalid_by_seq++;
+          c_iter->RecordDrop(value_copy);
+          c_iter->Next();
+          continue;
+        } else if (cache_seq < c_iter->ikey().sequence) {
+          //shadow key is outdated
+          outdated_shadow++;
+          Slice copy = cache_value;
+          c_iter->RecordDrop(copy);
+          (*cache_deletion_)[c_iter->user_key().ToString()] = cache_value;
+        } else {
+          //shadow key is the same as current key, merge them(替换value)
+          success_merge++;
+          value_copy = cache_value;
+          //no need to maintain this key in cache
+          (*cache_deletion_)[c_iter->user_key().ToString()] = cache_value;
+        }
+      }
+      //TODO: shadow file logic
+    }
+
+    const Slice& key = c_iter->key();
+    const Slice& value = value_copy;
+
     status = sub_compact->AddToBuilder(key, value);
     if (!status.ok()) {
       break;
@@ -1526,7 +1560,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                         &sub_compact->compaction_job_stats);
     }
   }
-  fprintf(stderr, "compaction_check_key: %lu, shadow_invalid_key: %lu, still_valid_key: %lu\n", compaction_check_key, shadow_invalid_key, compaction_check_key - shadow_invalid_key);
+  fprintf(stderr, "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_seq: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_seq, success_merge, outdated_shadow);
 
   sub_compact->compaction_job_stats.num_blobs_read =
       c_iter_stats.num_blobs_read;

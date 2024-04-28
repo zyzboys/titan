@@ -1919,7 +1919,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options, const Slice& key,
         read_options, lkey, get_impl_options.value, timestamp, &s,
         &merge_context, &max_covering_tombstone_seq, &pinned_iters_mgr,
         get_impl_options.get_value ? get_impl_options.value_found : nullptr,
-        nullptr, nullptr,
+        nullptr, &get_impl_options.seq,
         get_impl_options.get_value ? get_impl_options.callback : nullptr,
         get_impl_options.get_value ? get_impl_options.is_blob_index : nullptr,
         get_impl_options.get_value, get_impl_options.return_level, &get_impl_options.level);

@@ -3076,8 +3076,10 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       is_manual && manual_compaction->disallow_trivial_move;
 
   std::map<uint64_t, std::set<uint64_t>> drop_keys;
+  std::unordered_map<std::string, std::string> cache_deletion;
   CompactionJobStats compaction_job_stats;
   compaction_job_stats.drop_keys = &drop_keys;
+  compaction_job_stats.cache_deletion = &cache_deletion;
   Status status;
   if (!error_handler_.IsBGWorkStopped()) {
     if (shutting_down_.load(std::memory_order_acquire)) {

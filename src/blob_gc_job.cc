@@ -258,6 +258,7 @@ Status BlobGCJob::DoRunGC() {
 
     bool discardable = false;
     int level = -1;
+    SequenceNumber seq = 0;
     // use bitset to check if blob is live
     if (blob_gc_->titan_cf_options().drop_key_bitset) {
       s = DiscardEntryWithBitset(blob_index, &discardable);
@@ -266,13 +267,13 @@ Status BlobGCJob::DoRunGC() {
       }
       if (!discardable) {
         // maybe valid, check again in LSM and get the level of valid key
-        s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level);
+        s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
         if (!s.ok()) {
           break;
         }
       }
     } else {
-      s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level);
+      s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
       if (!s.ok()) {
         break;
       }
@@ -355,7 +356,7 @@ Status BlobGCJob::DoRunGC() {
 
     if (blob_gc_->titan_cf_options().shadow_cache) {
       // Add to shadow cache
-      AddToShadowCache(contexts);
+      AddToShadowCache(contexts, seq);
     }
 
     if (blob_gc_->titan_cf_options().rewrite_shadow) {
@@ -369,7 +370,7 @@ Status BlobGCJob::DoRunGC() {
       }
       assert(shadow_handles[level]->shadow_builder);
       assert(shadow_handles[level]->shadow_file);
-      s = AddToShadow(shadow_handles[level].get(), contexts);
+      s = AddToShadow(shadow_handles[level].get(), contexts, seq);
       if (!s.ok()) {
         break;
       }
@@ -488,7 +489,7 @@ Status BlobGCJob::OpenGCOutputShadow(ShadowHandle *handle, int level) {
   return s;
 }
 
-Status BlobGCJob::AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts& contexts) {
+Status BlobGCJob::AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts& contexts, SequenceNumber seq) {
   assert(handle->shadow_builder);
   Status s;
   for (const std::unique_ptr<BlobFileBuilder::BlobRecordContext>& ctx :
@@ -504,7 +505,7 @@ Status BlobGCJob::AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts
     if (!s.ok()) {
       return s;
     }
-    InternalKey shadow_ikey(ikey.user_key, 1, kTypeBlobIndex);
+    InternalKey shadow_ikey(ikey.user_key, seq, kTypeBlobIndex);
     handle->shadow_builder->Add(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry)); 
     handle->shadow_meta.UpdateBoundaries(Slice(shadow_ikey.Encode().ToString()), Slice(index_entry), ikey.sequence, ikey.type);
     if (!s.ok()) break;
@@ -555,7 +556,7 @@ Status BlobGCJob::FinishGCOutputShadow(ShadowHandle *handle, int level) {
 
 }
 
-Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts) {
+Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts, SequenceNumber seq) {
   Status s;
   for (const std::unique_ptr<BlobFileBuilder::BlobRecordContext>& ctx :
        contexts) {
@@ -570,7 +571,7 @@ Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts) {
     if (!s.ok()) {
       return s;
     }
-    cache_addition_[ikey.user_key.ToString()] = index_entry;
+    cache_addition_[ikey.user_key.ToString()] = std::make_pair(seq, index_entry);
     add_cache_count_++;
   }
   return s;
@@ -658,7 +659,7 @@ Status BlobGCJob::DiscardEntryWithBitset(const BlobIndex &blob_index, bool *disc
 }
 
 Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
-                               bool* discardable, int *level) {
+                               bool* discardable, int* level, SequenceNumber* seq) {
   TitanStopWatch sw(env_, metrics_.gc_read_lsm_micros);
   assert(discardable != nullptr);
   PinnableSlice index_entry;
@@ -671,6 +672,7 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
   gopts.return_level = true;
   Status s = base_db_impl_->GetImpl(ReadOptions(), key, gopts);
   *level = gopts.level;
+  *seq = gopts.seq;
   // if (*level == 0) {
   //   std::cout << "level 0" << std::endl;
   // }
@@ -766,8 +768,24 @@ Status BlobGCJob::InstallOutputShadows() {
 Status BlobGCJob::InstallOutputShadowCache() {
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadowCache()");
   Status s;
-  fprintf(stderr, "add cache count: %d, cache_addition size:%d \n", add_cache_count_, cache_addition_.size());
-  shadow_set_->AddCache(cache_addition_);
+  fprintf(stderr, "add cache count: %ld, cache_addition size:%ld \n", add_cache_count_, cache_addition_.size());
+  shadow_set_->GetShadowCache()->AddMuti(cache_addition_, &drop_keys);
+  mutex_->Lock();
+  auto cf_id = blob_gc_->column_family_handle()->GetID();
+  for (auto blobfile : drop_keys) {
+    auto blob_storage = blob_file_set_->GetBlobStorage(cf_id).lock();
+    if (blob_storage) {
+      auto file = blob_storage->FindFile(blobfile.first).lock();
+      if (!file) {
+        continue;
+      }
+      for (auto order : blobfile.second) {
+        file->SetLiveDataBitset(order, false);
+      }
+    }
+
+  }
+  mutex_->Unlock();
   return s;
 }
 

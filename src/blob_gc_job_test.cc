@@ -220,7 +220,8 @@ class BlobGCJobTest : public testing::Test {
                           nullptr, nullptr, nullptr);
     bool discardable = false;
     int level;
-    ASSERT_OK(blob_gc_job.DiscardEntry(key, blob_index, &discardable, &level));
+    SequenceNumber seq;
+    ASSERT_OK(blob_gc_job.DiscardEntry(key, blob_index, &discardable, &level, &seq));
     ASSERT_FALSE(discardable);
   }
 

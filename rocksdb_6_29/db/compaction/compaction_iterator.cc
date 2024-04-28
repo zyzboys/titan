@@ -758,7 +758,7 @@ void CompactionIterator::NextFromInput() {
         if (!builder_) {
           ROCKS_LOG_ERROR(info_log_, "no table builer, can't record drop key's order");
         } else {
-          builder_->RecordDrop(value_, drop_keys_);
+          RecordDrop(value_);
         }
       }
       AdvanceInputIter();

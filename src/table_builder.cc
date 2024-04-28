@@ -120,7 +120,7 @@ void TitanTableBuilder::RecordDrop(const Slice& value, std::map<uint64_t, std::s
   if (!ok()) return;
 
   if (drop_keys == NULL) {
-    TITAN_LOG_INFO(db_options_.info_log, "no need to drop");
+    TITAN_LOG_INFO(db_options_.info_log, "titan table builder no need to drop");
     return;
   }
 

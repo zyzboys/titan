@@ -218,6 +218,8 @@ class CompactionJob {
   std::string full_history_ts_low_;
   BlobFileCompletionCallback* blob_callback_;
   ShadowSet* shadow_set_;
+  
+  std::unordered_map<std::string, std::string>* cache_deletion_;
 
   uint64_t GetCompactionId(SubcompactionState* sub_compact);
 

@@ -76,7 +76,8 @@ class BlobGCJob {
       blob_file_builders_;
   
   std::vector<std::pair<int, FileMetaData>> shadow_metas_;
-  std::unordered_map<std::string, std::string> cache_addition_;
+  std::unordered_map<std::string, std::pair<SequenceNumber, std::string>> cache_addition_;
+  std::map<uint64_t, std::set<uint64_t>> drop_keys;
   uint64_t add_cache_count_ = 0;
   std::vector<std::pair<WriteBatch, GarbageCollectionWriteCallback>>
       rewrite_batches_;
@@ -114,15 +115,15 @@ class BlobGCJob {
   void BatchWriteNewIndices(BlobFileBuilder::OutContexts &contexts, Status *s);
   Status BuildIterator(std::unique_ptr<BlobFileMergeIterator> *result);
   Status DiscardEntry(const Slice &key, const BlobIndex &blob_index,
-                      bool *discardable, int *level);
+                      bool *discardable, int *level, SequenceNumber* seq);
   Status DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable);
   Status InstallOutputShadows();
   Status InstallOutputShadowCache();
   Status InstallOutputBlobFiles();
   Status RewriteValidKeyToLSM();
   Status OpenGCOutputShadow(ShadowHandle *handle, int level);
-  Status AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts& contexts);
-  Status AddToShadowCache(BlobFileBuilder::OutContexts& contexts);
+  Status AddToShadow(ShadowHandle *handle, BlobFileBuilder::OutContexts& contexts, SequenceNumber seq);
+  Status AddToShadowCache(BlobFileBuilder::OutContexts& contexts, SequenceNumber seq);
   Status FinishGCOutputShadow(ShadowHandle *handle, int level);
   Status DeleteInputBlobFiles();
 

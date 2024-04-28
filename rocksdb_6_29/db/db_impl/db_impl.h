@@ -560,6 +560,7 @@ class DBImpl : public DB {
 
     bool return_level = false;
     int level = -1;
+    SequenceNumber seq = kMaxSequenceNumber;
   };
 
   // Function that Get and KeyMayExist call with no_io true or false

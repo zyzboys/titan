@@ -232,8 +232,16 @@ class CompactionIterator {
   uint64_t num_input_entry_scanned() const { return input_.num_itered(); }
 
   void SetTableBuilder(TableBuilder* builder) { builder_ = builder; }
+
   void SetDropKeys(std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
     drop_keys_ = drop_keys;
+  }
+
+  void RecordDrop(const Slice& value) {
+    if (!builder_) {
+      return;
+    }
+    builder_->RecordDrop(value, drop_keys_);
   }
   
  private:

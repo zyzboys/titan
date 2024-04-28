@@ -9,7 +9,7 @@
 #include <string>
 #include <set>
 #include <map>
-
+#include <unordered_map>
 #include "rocksdb/rocksdb_namespace.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -107,5 +107,7 @@ struct CompactionJobStats {
 
   // drop keys
   std::map<uint64_t, std::set<uint64_t>>* drop_keys;
+  // cache deletion
+  std::unordered_map<std::string, std::string>* cache_deletion;
 };
 }  // namespace ROCKSDB_NAMESPACE

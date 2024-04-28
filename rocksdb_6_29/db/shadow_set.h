@@ -25,10 +25,124 @@ struct ShadowScore {
   double score;
 };
 
-struct ShadowCacheCompare {
-  bool operator()(const std::string& a, const std::string& b) const {
-    return BytewiseComparator()->Compare(Slice(a), Slice(b)) < 0;
-  }
+class ShadowCache {
+  public:
+    ShadowCache() {}
+    ~ShadowCache() {}
+
+    struct ShadowCacheCompare {
+      bool operator()(const std::string& a, const std::string& b) const {
+        return BytewiseComparator()->Compare(Slice(a), Slice(b)) < 0;
+      }
+    };
+
+    void Add(const std::string& key, std::pair<SequenceNumber, std::string>& value, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
+      MutexLock l(&cache_mutex_);
+      auto it = cache_.find(key);
+      // if key already exists, add the key to drop_keys
+      if (it != cache_.end()) {
+        TitanBlobIndex index;
+        Slice copy = value.second;
+        index.DecodeFrom(&copy);
+        // record drop keys in set
+        (*drop_keys)[index.file_number].insert(index.blob_handle.order);
+      }
+      cache_[key] = value;
+    }
+
+    void Add(const std::string& key, std::pair<SequenceNumber, std::string>& value) {
+      MutexLock l(&cache_mutex_);
+      cache_[key] = value;
+    }
+
+    void AddMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
+      MutexLock l(&cache_mutex_);
+      fprintf(stderr, "Add cache begin, cache size: %ld, addition size: %ld\n", cache_.size(), cache_addition.size());
+      for (auto& cache : cache_addition) {
+        auto it = cache_.find(cache.first);
+        // if key already exists, add the key to drop_keys
+        if (it != cache_.end()) {
+          TitanBlobIndex index;
+          Slice copy = cache.second.second;
+          index.DecodeFrom(&copy);
+          // record drop keys in set
+          (*drop_keys)[index.file_number].insert(index.blob_handle.order);
+        }
+        cache_[cache.first] = cache.second;
+      }
+      fprintf(stderr, "Add cache done, cache size: %ld\n", cache_.size());
+    }
+
+    void AddMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition) {
+      MutexLock l(&cache_mutex_);
+      for (auto& cache : cache_addition) {
+        cache_[cache.first] = cache.second;
+      }
+    }
+
+    void DeleteMuti(std::unordered_map<std::string, std::string>& cache_deletion) {
+      MutexLock l(&cache_mutex_);
+      fprintf(stderr, "Delete cache begin, cache size: %ld, deletion size: %ld\n", cache_.size(), cache_deletion.size());
+      for (auto& cache : cache_deletion) {
+        TitanBlobIndex delete_blob_index;
+        Slice delete_slice = cache.second;
+        delete_blob_index.DecodeFrom(&delete_slice);
+        auto it = cache_.find(cache.first);
+        if (it != cache_.end()) {
+          TitanBlobIndex blob_index;
+          Slice original_slice = it->second.second;
+          blob_index.DecodeFrom(&original_slice);
+          // make sure we only delete the shadow cache that is older or equal than the new one
+          if (blob_index.file_number <= delete_blob_index.file_number) {
+            cache_.erase(it);
+          }
+        }
+        //else it means the key is already deleted
+      }
+      fprintf(stderr, "Delete cache done, cache size: %ld\n", cache_.size());
+    }
+
+    void Delete(const std::string& key, std::string& value) {
+      MutexLock l(&cache_mutex_);
+      TitanBlobIndex delete_blob_index;
+      Slice delete_slice = value;
+      delete_blob_index.DecodeFrom(&delete_slice);
+      auto it = cache_.find(key);
+      if (it != cache_.end()) {
+        TitanBlobIndex blob_index;
+        Slice original_slice = it->second.second;
+        blob_index.DecodeFrom(&original_slice);
+        // make sure we only delete the shadow cache that is older or equal than the new one
+        if (blob_index.file_number <= delete_blob_index.file_number) {
+          cache_.erase(it);
+        }
+      }
+      //else it means the key is already deleted
+    }
+
+    bool KeyExist(const std::string& key) const {
+      MutexLock l(&cache_mutex_);
+      return cache_.find(key) != cache_.end();
+    }
+
+    bool KeyExist(const std::string& key, SequenceNumber* seq, std::string& value) const {
+      MutexLock l(&cache_mutex_);
+      auto it = cache_.find(key);
+      if (it != cache_.end()) {
+        *seq = it->second.first;
+        value = it->second.second;
+        return true;
+      }
+      return false;
+    }
+
+    port::Mutex* GetMutex() { return &cache_mutex_; }
+
+
+  private:
+    mutable port::Mutex cache_mutex_;
+    std::map<std::string, std::pair<SequenceNumber, std::string>, ShadowCacheCompare> cache_;
+    
 };
 
 // ShadowSet is the set of all the shadows generated during Titan GC.
@@ -47,18 +161,19 @@ public:
 
   port::Mutex* GetMutex();
 
+  port::Mutex* GetShadowCacheMutex() { return shadow_cache_.GetMutex(); }
+
   void PrintShadowSummary();
 
   void ComputeShadowScore();
 
-  void AddCache(std::unordered_map<std::string, std::string>& cache_addition);
+  // void AddCacheMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition);
 
-  void DeleteCache(std::unordered_map<std::string, std::string>& cache_deletion);
+  // void AddCacheMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition, std::map<uint64_t, std::set<uint64_t>>* drop_keys);
 
-  bool KeyExistInCache(const std::string& key) const;
+  // void DeleteCacheMuti(std::unordered_map<std::string, std::string>& cache_deletion);
 
-
-
+  ShadowCache* GetShadowCache() { return &shadow_cache_; }
 
   class FileLocation {
    public:
@@ -91,7 +206,7 @@ public:
   std::vector<FileMetaData*> shadow_files_[LSM_MAX_LEVEL];
   std::vector<ShadowScore> shadow_scores_;
   // userkey-><value>
-  std::map<std::string, std::string, ShadowCacheCompare> shadow_cache_;
+  ShadowCache shadow_cache_;
   // List of guards per level which are persisted to disk and already committed to a MANIFEST
   //std::vector<GuardMetaData*> guards_[LSM_MAX_LEVEL];
   std::unordered_map<uint64_t, FileLocation> file_locations_;
