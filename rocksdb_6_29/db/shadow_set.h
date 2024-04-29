@@ -127,6 +127,9 @@ class ShadowCache {
 
     bool KeyExist(const std::string& key, SequenceNumber* seq, std::string& value) const {
       MutexLock l(&cache_mutex_);
+      if (cache_.size() == 0) {
+        return false;
+      }
       auto it = cache_.find(key);
       if (it != cache_.end()) {
         *seq = it->second.first;
