@@ -7194,7 +7194,7 @@ int db_bench_tool(int argc, char** argv) {
   }
 #endif  // ROCKSDB_LITE
   if (FLAGS_statistics) {
-    dbstats = rocksdb::CreateDBStatistics<214,67>();
+    dbstats = rocksdb::CreateDBStatistics<214,69>();
   }
   if (dbstats) {
     dbstats->set_stats_level(static_cast<StatsLevel>(FLAGS_stats_level));

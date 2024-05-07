@@ -260,25 +260,29 @@ Status BlobGCJob::DoRunGC() {
     int level = -1;
     SequenceNumber seq = 0;
     // use bitset to check if blob is live
-    if (blob_gc_->titan_cf_options().drop_key_bitset) {
-      s = DiscardEntryWithBitset(blob_index, &discardable);
-      if (!s.ok()) {
-        break;
-      }
-      if (!discardable) {
-        // maybe valid, check again in LSM and get the level of valid key
+    {
+      StopWatch gc_sw(env_->GetSystemClock().get(), statistics(stats_),
+                    TITAN_GC_CHECK_MICROS);
+      if (blob_gc_->titan_cf_options().drop_key_bitset) {
+        s = DiscardEntryWithBitset(blob_index, &discardable);
+        if (!s.ok()) {
+          break;
+        }
+        if (!discardable) {
+          // maybe valid, check again in LSM and get the level of valid key
+          s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
+          if (!s.ok()) {
+            break;
+          }
+        }
+      } else {
         s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
         if (!s.ok()) {
           break;
         }
       }
-    } else {
-      s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
-      if (!s.ok()) {
-        break;
-      }
     }
-
+    
     if (discardable) {
       // if (level == 0) {
       //   std::cout << "L0 discardable" << std::endl;
@@ -572,7 +576,6 @@ Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts, Seque
       return s;
     }
     cache_addition_[ikey.user_key.ToString()] = std::make_pair(seq, index_entry);
-    add_cache_count_++;
   }
   return s;
 
@@ -634,7 +637,6 @@ Status BlobGCJob::BuildIterator(
 }
 
 Status BlobGCJob::DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable) {
-  TitanStopWatch sw(env_, metrics_.gc_read_lsm_micros);
   assert(discardable != nullptr);
   std::shared_ptr<BlobFileMeta> file;
   // find blob file meta
@@ -681,7 +683,7 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
   }
   // count read bytes for checking LSM entry
   metrics_.gc_bytes_read_check += key.size() + index_entry.size();
-  if (s.IsNotFound() || !is_blob_index) {
+  if (s.IsNotFound() || !is_blob_index || *level == -1) {
     // Either the key is deleted or updated with a newer version which is
     // inlined in LSM.
     *discardable = true;
@@ -766,9 +768,9 @@ Status BlobGCJob::InstallOutputShadows() {
 }
 
 Status BlobGCJob::InstallOutputShadowCache() {
-  TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadowCache()");
   Status s;
-  fprintf(stderr, "add cache count: %ld, cache_addition size:%ld \n", add_cache_count_, cache_addition_.size());
+  TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadowCache()");
+  TITAN_LOG_INFO(db_options_.info_log, "add cache count: %ld\n", cache_addition_.size());
   shadow_set_->GetShadowCache()->AddMuti(cache_addition_, &drop_keys);
   mutex_->Lock();
   auto cf_id = blob_gc_->column_family_handle()->GetID();
@@ -862,6 +864,8 @@ Status BlobGCJob::InstallOutputBlobFiles() {
 Status BlobGCJob::RewriteValidKeyToLSM() {
   TITAN_LOG_INFO(db_options_.info_log, "in RewriteValidKeyToLSM()");
   TitanStopWatch sw(env_, metrics_.gc_update_lsm_micros);
+  StopWatch gc_sw(env_->GetSystemClock().get(), statistics(stats_),
+                    TITAN_GC_WRITEBACK_MICROS);
   Status s;
   auto* db_impl = reinterpret_cast<DBImpl*>(base_db_);
 

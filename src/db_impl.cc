@@ -663,7 +663,8 @@ Status TitanDBImpl::GetImpl(const ReadOptions& options,
   if (storage) {
     StopWatch read_sw(env_->GetSystemClock().get(), statistics(stats_.get()),
                       TITAN_BLOB_FILE_READ_MICROS);
-    s = storage->Get(options, index, &record, &buffer);
+    //s = storage->Get(options, index, &record, &buffer);
+    s = storage->Get(options, index, &record, &buffer, key, shadow_set_);
     RecordTick(statistics(stats_.get()), TITAN_BLOB_FILE_NUM_KEYS_READ);
     RecordTick(statistics(stats_.get()), TITAN_BLOB_FILE_BYTES_READ,
                index.blob_handle.size);
@@ -1319,6 +1320,7 @@ void TitanDBImpl::OnCompactionCompleted(
   update_diff(compaction_job_info.output_files, true /*to_add*/);
 
   shadow_set_->GetShadowCache()->DeleteMuti(*(compaction_job_info.stats.cache_deletion));
+  TITAN_LOG_INFO(db_options_.info_log, "delete cache count: %ld\n", (compaction_job_info.stats.cache_deletion)->size());
 
   {
     MutexLock l(&mutex_);

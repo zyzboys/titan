@@ -10,6 +10,7 @@
 #include "blob_format.h"
 #include "blob_gc.h"
 #include "titan_stats.h"
+#include "db/shadow_set.h"
 
 namespace rocksdb {
 namespace titandb {
@@ -59,6 +60,8 @@ class BlobStorage {
     return gc_score_;
   }
 
+  Status Get(const ReadOptions& options, const BlobIndex& index,
+             BlobRecord* record, PinnableSlice* buffer, const Slice& key, ShadowSet* shadow_set);
   // Gets the blob record pointed by the blob index. The provided
   // buffer is used to store the record data, so the buffer must be
   // valid when the record is used.

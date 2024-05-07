@@ -78,7 +78,6 @@ class BlobGCJob {
   std::vector<std::pair<int, FileMetaData>> shadow_metas_;
   std::unordered_map<std::string, std::pair<SequenceNumber, std::string>> cache_addition_;
   std::map<uint64_t, std::set<uint64_t>> drop_keys;
-  uint64_t add_cache_count_ = 0;
   std::vector<std::pair<WriteBatch, GarbageCollectionWriteCallback>>
       rewrite_batches_;
 

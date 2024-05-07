@@ -1463,16 +1463,16 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         //fprintf(stderr, "seq: %lu, cache_seq: %lu\n", c_iter->ikey().sequence, cache_seq);
         if (cache_seq > c_iter->ikey().sequence) {
           //shadow key is newer, it means upper level has newer version of this key, drop it!
-          invalid_by_seq++;
-          c_iter->RecordDrop(value_copy);
-          c_iter->Next();
-          continue;
+          // invalid_by_seq++;
+          // c_iter->RecordDrop(value_copy);
+          // c_iter->Next();
+          // continue;
         } else if (cache_seq < c_iter->ikey().sequence) {
           //shadow key is outdated
-          outdated_shadow++;
-          Slice copy = cache_value;
-          c_iter->RecordDrop(copy);
-          (*cache_deletion_)[c_iter->user_key().ToString()] = cache_value;
+          // outdated_shadow++;
+          // Slice copy = cache_value;
+          // c_iter->RecordDrop(copy);
+          // (*cache_deletion_)[c_iter->user_key().ToString()] = cache_value;
         } else {
           //shadow key is the same as current key, merge them(替换value)
           success_merge++;
@@ -1560,7 +1560,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                         &sub_compact->compaction_job_stats);
     }
   }
-  fprintf(stderr, "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_seq: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_seq, success_merge, outdated_shadow);
+  ROCKS_LOG_INFO(db_options_.info_log,
+                 "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_seq: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_seq, success_merge, outdated_shadow);
+  //fprintf(stderr, "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_seq: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_seq, success_merge, outdated_shadow);
 
   sub_compact->compaction_job_stats.num_blobs_read =
       c_iter_stats.num_blobs_read;

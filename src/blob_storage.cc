@@ -7,6 +7,37 @@ namespace rocksdb {
 namespace titandb {
 
 Status BlobStorage::Get(const ReadOptions& options, const BlobIndex& index,
+                        BlobRecord* record, PinnableSlice* buffer, const Slice& key, ShadowSet* shadow_set) {
+  auto sfile = FindFile(index.file_number).lock();
+  if (!sfile) {
+    // If the file is not found, it may be in the shadow set
+    BlobIndex redirect;
+    std::string cache_value;
+    if (shadow_set->GetShadowCache()->KeyExist(key.ToString(), cache_value)) {
+      Slice copy = cache_value;
+      redirect.DecodeFrom(&copy);
+      if (redirect.file_number < index.file_number) {
+        fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, but shadow file number is smaller\n", index.file_number, redirect.file_number);
+        return Status::Corruption("Missing blob file: " +
+                              std::to_string(index.file_number));
+      }
+      sfile = FindFile(redirect.file_number).lock();
+      if (!sfile) {
+        fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, but shadow file number is missing\n", index.file_number, redirect.file_number);
+        return Status::Corruption("Missing blob file: " +
+                              std::to_string(redirect.file_number));
+      }
+    } else {
+      return Status::Corruption("Missing blob file: " +
+                              std::to_string(index.file_number));
+    }
+    fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, success\n", index.file_number, redirect.file_number);
+  }
+  return file_cache_->Get(options, sfile->file_number(), sfile->file_size(),
+                          index.blob_handle, record, buffer);
+}
+
+Status BlobStorage::Get(const ReadOptions& options, const BlobIndex& index,
                         BlobRecord* record, PinnableSlice* buffer) {
   auto sfile = FindFile(index.file_number).lock();
   if (!sfile)

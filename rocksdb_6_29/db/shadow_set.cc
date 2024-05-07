@@ -42,35 +42,5 @@ void ShadowSet::AddShadows(std::vector<std::pair<int, FileMetaData>>& shadows) {
     shadow_scores_.clear();
   }
 
-  // void ShadowSet::AddCacheMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition) {
-  //   fprintf(stderr, "Add cache begin, cache size: %ld\n", GetShadowCache()->CacheSize());
-  //   GetShadowCacheMutex()->Lock();
-  //   for (auto& cache : cache_addition) {
-  //     shadow_cache_.Add(cache.first, cache.second);
-  //   }
-  //   GetShadowCacheMutex()->Unlock();
-  //   fprintf(stderr, "Add cache done, cache size: %ld\n", GetShadowCache()->CacheSize());
-  // }
-
-  // void ShadowSet::AddCacheMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
-  //   fprintf(stderr, "Add cache begin, cache size: %ld\n", GetShadowCache()->CacheSize());
-  //   GetShadowCacheMutex()->Lock();
-  //   for (auto& cache : cache_addition) {
-  //     shadow_cache_.Add(cache.first, cache.second, drop_keys);
-  //   }
-  //   GetShadowCacheMutex()->Unlock();
-  //   fprintf(stderr, "Add cache done, cache size: %ld\n", GetShadowCache()->CacheSize());
-  // }
-
-  // void ShadowSet::DeleteCacheMuti(std::unordered_map<std::string, std::string>& cache_deletion) {
-  //   fprintf(stderr, "Delete cache begin, cache size: %ld\n", GetShadowCache()->CacheSize());
-  //   GetShadowCacheMutex()->Lock();
-  //   for (auto& cache : cache_deletion) {
-  //     shadow_cache_.Delete(cache.first, cache.second);   
-  //   }
-  //   GetShadowCacheMutex()->Unlock();
-  //   fprintf(stderr, "Delete cache done, cache size: %ld\n", GetShadowCache()->CacheSize());
-  // }
-
 
 }  // namespace rocksdb
