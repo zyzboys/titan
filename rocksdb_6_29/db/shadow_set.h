@@ -36,7 +36,7 @@ class ShadowCache {
       }
     };
 
-    void Add(const std::string& key, std::pair<SequenceNumber, std::string>& value, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
+    void Add(const std::string& key, std::pair<uint64_t, std::string>& value, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
       MutexLock l(&cache_mutex_);
       auto it = cache_.find(key);
       // if key already exists, add the key to drop_keys
@@ -50,12 +50,12 @@ class ShadowCache {
       cache_[key] = value;
     }
 
-    void Add(const std::string& key, std::pair<SequenceNumber, std::string>& value) {
+    void Add(const std::string& key, std::pair<uint64_t, std::string>& value) {
       MutexLock l(&cache_mutex_);
       cache_[key] = value;
     }
 
-    void AddMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
+    void AddMulti(std::unordered_map<std::string, std::pair<uint64_t, std::string>>& cache_addition, std::map<uint64_t, std::set<uint64_t>>* drop_keys) {
       MutexLock l(&cache_mutex_);
       //fprintf(stderr, "Add cache begin, cache size: %ld, addition size: %ld\n", cache_.size(), cache_addition.size());
       for (auto& cache : cache_addition) {
@@ -68,14 +68,15 @@ class ShadowCache {
           TitanBlobIndex original_index;
           Slice original_copy = it->second.second;
           original_index.DecodeFrom(&original_copy);
-          if (original_index.file_number > index.file_number) {
-            fprintf(stderr, "Error: shadow cache file number is not in order\n");
-          }
+          
           // record drop keys in set
-          // if (it->second.first > cache.second.first) {
-          //   //已有的序列号比新的大，说明是乱序的，需要报错
-          //   fprintf(stderr, "Error: shadow cache seq number is not in order\n");
-          // }
+          if (it->second.first > cache.second.first || original_index.file_number > index.file_number) {
+            //保证file_number是递增的
+            //fprintf(stderr, "in AddMulti, original father file number: %ld, new father file number: %ld ", it->second.first, cache.second.first);
+            //fprintf(stderr, "original redirect file number: %ld, new redirect file number: %ld, can't add\n", original_index.file_number, index.file_number);
+            continue;
+          }
+          //将旧的标记为drop
           (*drop_keys)[index.file_number].insert(index.blob_handle.order);
         }
         cache_[cache.first] = cache.second;
@@ -83,7 +84,7 @@ class ShadowCache {
       //fprintf(stderr, "Add cache done, cache size: %ld\n", cache_.size());
     }
 
-    void AddMuti(std::unordered_map<std::string, std::pair<SequenceNumber, std::string>>& cache_addition) {
+    void AddMulti(std::unordered_map<std::string, std::pair<uint64_t, std::string>>& cache_addition) {
       MutexLock l(&cache_mutex_);
       for (auto& cache : cache_addition) {
         cache_[cache.first] = cache.second;
@@ -105,6 +106,8 @@ class ShadowCache {
           // make sure we only delete the shadow cache that is older or equal than the new one
           if (blob_index.file_number <= delete_blob_index.file_number) {
             cache_.erase(it);
+          } else {
+            //fprintf(stderr, "in DelteMulti, original redirect number: %ld is bigger than delete redirect number: %ld, can't delete\n", blob_index.file_number, delete_blob_index.file_number);
           }
         }
         //else it means the key is already deleted
@@ -151,14 +154,14 @@ class ShadowCache {
       return false;
     }
 
-    bool KeyExist(const std::string& key, SequenceNumber* seq, std::string& value) const {
+    bool KeyExist(const std::string& key, uint64_t* file_number, std::string& value) const {
       MutexLock l(&cache_mutex_);
       if (cache_.size() == 0) {
         return false;
       }
       auto it = cache_.find(key);
       if (it != cache_.end()) {
-        *seq = it->second.first;
+        *file_number = it->second.first;
         value = it->second.second;
         return true;
       }
@@ -167,11 +170,10 @@ class ShadowCache {
 
     port::Mutex* GetMutex() { return &cache_mutex_; }
 
-
   private:
     mutable port::Mutex cache_mutex_; 
     //std::map<std::string, std::pair<SequenceNumber, std::string>, ShadowCacheCompare> cache_;
-    std::unordered_map<std::string, std::pair<SequenceNumber, std::string>> cache_;
+    std::unordered_map<std::string, std::pair<uint64_t, std::string>> cache_;//userkey->(father number, value)
     
 };
 

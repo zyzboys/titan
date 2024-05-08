@@ -257,13 +257,21 @@ Status BlobGCJob::DoRunGC() {
     }
 
     bool discardable = false;
-    int level = -1;
+    bool in_shadow = false;
+    int level = 0;
     SequenceNumber seq = 0;
-    // use bitset to check if blob is live
     {
       StopWatch gc_sw(env_->GetSystemClock().get(), statistics(stats_),
                     TITAN_GC_CHECK_MICROS);
-      if (blob_gc_->titan_cf_options().drop_key_bitset) {
+      //先查看是否在shadow_cache中
+      // s = DiscardEntryWithShadow(gc_iter->key(), blob_index, &discardable, &in_shadow);
+      // if (!s.ok()) {
+      //   break;
+      // }       
+
+      //未开启shadow_cache或者shadow_cache中没有该key，正常检查
+      if (!in_shadow) {
+        if (blob_gc_->titan_cf_options().drop_key_bitset) {
         s = DiscardEntryWithBitset(blob_index, &discardable);
         if (!s.ok()) {
           break;
@@ -275,10 +283,11 @@ Status BlobGCJob::DoRunGC() {
             break;
           }
         }
-      } else {
-        s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
-        if (!s.ok()) {
-          break;
+        } else {
+          s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
+          if (!s.ok()) {
+            break;
+          }
         }
       }
     }
@@ -292,7 +301,7 @@ Status BlobGCJob::DoRunGC() {
       discardable_count++;
       continue;
     }
-    assert(level != -1);
+    // assert(level != -1);
     valid_count++;
     last_key_is_fresh = true;
 
@@ -360,7 +369,7 @@ Status BlobGCJob::DoRunGC() {
 
     if (blob_gc_->titan_cf_options().shadow_cache) {
       // Add to shadow cache
-      AddToShadowCache(contexts, seq);
+      AddToShadowCache(contexts);
     }
 
     if (blob_gc_->titan_cf_options().rewrite_shadow) {
@@ -560,13 +569,14 @@ Status BlobGCJob::FinishGCOutputShadow(ShadowHandle *handle, int level) {
 
 }
 
-Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts, SequenceNumber seq) {
+Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts) {
   Status s;
   for (const std::unique_ptr<BlobFileBuilder::BlobRecordContext>& ctx :
        contexts) {
     BlobIndex blob_index;
     blob_index.file_number = ctx->new_blob_index.file_number;
     blob_index.blob_handle = ctx->new_blob_index.blob_handle;
+    uint64_t father_number = ctx->original_blob_index.file_number;
 
     std::string index_entry;
     blob_index.EncodeTo(&index_entry);
@@ -575,7 +585,7 @@ Status BlobGCJob::AddToShadowCache(BlobFileBuilder::OutContexts& contexts, Seque
     if (!s.ok()) {
       return s;
     }
-    cache_addition_[ikey.user_key.ToString()] = std::make_pair(seq, index_entry);
+    cache_addition_[ikey.user_key.ToString()] = std::make_pair(father_number, index_entry);
   }
   return s;
 
@@ -636,6 +646,28 @@ Status BlobGCJob::BuildIterator(
   return s;
 }
 
+Status BlobGCJob::DiscardEntryWithShadow(const Slice& key, const BlobIndex& blob_index, bool *discardable, bool *in_shadow) {
+  std::string cache_value;
+  if (shadow_set_->GetShadowCache()->KeyExist(key.ToString(), cache_value)) {
+    *in_shadow = true;
+    BlobIndex shadow_index;
+    Slice copy = cache_value;
+    shadow_index.DecodeFrom(&copy);
+    if (blob_index == shadow_index) {
+      //shadow里有，但是一样，说明还没来得及合并，不丢弃
+      //fprintf(stderr, "in shadow, same, remain\n");
+      *discardable = false;
+    } else {
+      //shadow里有，但是不一样，丢弃
+      //fprintf(stderr, "in shadow, different, discard\n");
+      *discardable = true;
+    }
+  }
+  //不在shadow里，可能已经合并了或者是LSM本来的key，需要进一步检查
+  return Status::OK();
+}
+
+
 Status BlobGCJob::DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable) {
   assert(discardable != nullptr);
   std::shared_ptr<BlobFileMeta> file;
@@ -683,7 +715,7 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
   }
   // count read bytes for checking LSM entry
   metrics_.gc_bytes_read_check += key.size() + index_entry.size();
-  if (s.IsNotFound() || !is_blob_index || *level == -1) {
+  if (s.IsNotFound() || !is_blob_index) {
     // Either the key is deleted or updated with a newer version which is
     // inlined in LSM.
     *discardable = true;
@@ -696,7 +728,12 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
     return s;
   }
 
-  *discardable = !(blob_index == other_blob_index);
+  //*discardable = !(blob_index == other_blob_index);
+  if (other_blob_index.file_number > blob_index.file_number) {
+    //fprintf(stderr, "wrong discardable, get filenum:%ld, gc filenum:%ld\n", other_blob_index.file_number, blob_index.file_number);
+    //当lsm里面的filenumber比gc的大时才丢弃，如果lsm的比gc的小，说明还没来得及合入lsm，可能在shadow里
+    *discardable = true;
+  }
   return Status::OK();
 }
 
@@ -771,7 +808,7 @@ Status BlobGCJob::InstallOutputShadowCache() {
   Status s;
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadowCache()");
   TITAN_LOG_INFO(db_options_.info_log, "add cache count: %ld\n", cache_addition_.size());
-  shadow_set_->GetShadowCache()->AddMuti(cache_addition_, &drop_keys);
+  shadow_set_->GetShadowCache()->AddMulti(cache_addition_, &drop_keys);
   mutex_->Lock();
   auto cf_id = blob_gc_->column_family_handle()->GetID();
   for (auto blobfile : drop_keys) {

@@ -52,7 +52,7 @@ void TitanBlobRecord::EncodeTo(std::string* dst) const {
 Status TitanBlobRecord::DecodeFrom(Slice* src) {
   if (!GetLengthPrefixedSlice(src, &key) ||
       !GetLengthPrefixedSlice(src, &value)) {
-    return Status::Corruption("TitanBlobRecord");
+    return Status::Corruption("BlobRecord");
   }
   return Status::OK();
 }
@@ -84,13 +84,13 @@ void TitanBlobEncoder::EncodeSlice(const Slice& record) {
 
 Status TitanBlobDecoder::DecodeHeader(Slice* src) {
   if (!GetFixed32(src, &crc_)) {
-    return Status::Corruption("TitanBlobHeader");
+    return Status::Corruption("BlobHeader");
   }
   header_crc_ = crc32c::Value(src->data(), kTitanRecordHeaderSize - 4);
 
   unsigned char compression;
   if (!GetFixed32(src, &record_size_) || !TitanGetChar(src, &compression)) {
-    return Status::Corruption("TitanBlobHeader");
+    return Status::Corruption("BlobHeader");
   }
 
   compression_ = static_cast<CompressionType>(compression);
@@ -99,13 +99,13 @@ Status TitanBlobDecoder::DecodeHeader(Slice* src) {
 
 Status TitanBlobDecoder::DecodeRecord(Slice* src, TitanBlobRecord* record,
                                  TitanOwnedSlice* buffer) {
-  TEST_SYNC_POINT_CALLBACK("TitanBlobDecoder::DecodeRecord", &crc_);
+  TEST_SYNC_POINT_CALLBACK("BlobDecoder::DecodeRecord", &crc_);
 
   Slice input(src->data(), record_size_);
   src->remove_prefix(record_size_);
   uint32_t crc = crc32c::Extend(header_crc_, input.data(), input.size());
   if (crc != crc_) {
-    return Status::Corruption("TitanBlobRecord", "checksum mismatch");
+    return Status::Corruption("BlobRecord", "checksum mismatch");
   }
 
   if (compression_ == kNoCompression) {
@@ -128,7 +128,7 @@ void TitanBlobHandle::EncodeTo(std::string* dst) const {
 
 Status TitanBlobHandle::DecodeFrom(Slice* src) {
   if (!GetVarint64(src, &offset) || !GetVarint64(src, &size) || !GetVarint64(src, &order)) {
-    return Status::Corruption("TitanBlobHandle");
+    return Status::Corruption("BlobHandle");
   }
   return Status::OK();
 }
@@ -139,20 +139,20 @@ bool operator==(const TitanBlobHandle& lhs, const TitanBlobHandle& rhs) {
 }
 
 void TitanBlobIndex::EncodeTo(std::string* dst) const {
-  dst->push_back(kTitanBlobRecord);
+  dst->push_back(kBlobRecord);
   PutVarint64(dst, file_number);
   blob_handle.EncodeTo(dst);
 }
 
 Status TitanBlobIndex::DecodeFrom(Slice* src) {
   unsigned char type;
-  if (!TitanGetChar(src, &type) || type != kTitanBlobRecord ||
+  if (!TitanGetChar(src, &type) || type != kBlobRecord ||
       !GetVarint64(src, &file_number)) {
-    return Status::Corruption("TitanBlobIndex");
+    return Status::Corruption("BlobIndex");
   }
   Status s = blob_handle.DecodeFrom(src);
   if (!s.ok()) {
-    return Status::Corruption("TitanBlobIndex", s.ToString());
+    return Status::Corruption("BlobIndex", s.ToString());
   }
   return s;
 }

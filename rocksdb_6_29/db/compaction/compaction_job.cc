@@ -1426,7 +1426,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   std::string last_key_for_partitioner;
   uint64_t compaction_check_key = 0;
   uint64_t key_in_cache = 0;
-  uint64_t invalid_by_seq = 0;
+  uint64_t invalid_by_father = 0;
   uint64_t success_merge = 0;
   uint64_t outdated_shadow = 0;
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
@@ -1453,26 +1453,29 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
     Slice value_copy = c_iter->value();
 
-    compaction_check_key++;
-    SequenceNumber cache_seq = 0;
     std::string cache_value;
+    compaction_check_key++;
+    uint64_t father_number = 0;
     if (c_iter->ikey().type == kTypeBlobIndex) {
-      if (shadow_set_->GetShadowCache()->KeyExist(c_iter->user_key().ToString(), &cache_seq, cache_value)) {
+      if (shadow_set_->GetShadowCache()->KeyExist(c_iter->user_key().ToString(), &father_number, cache_value)) {
         key_in_cache++;
+        TitanBlobIndex lsm_index;
+        Slice copy = value_copy;
+        lsm_index.DecodeFrom(&copy);
         //key exist in cache
         //fprintf(stderr, "seq: %lu, cache_seq: %lu\n", c_iter->ikey().sequence, cache_seq);
-        if (cache_seq > c_iter->ikey().sequence) {
+        if (father_number > lsm_index.file_number) {
           //shadow key is newer, it means upper level has newer version of this key, drop it!
-          // invalid_by_seq++;
-          // c_iter->RecordDrop(value_copy);
-          // c_iter->Next();
-          // continue;
-        } else if (cache_seq < c_iter->ikey().sequence) {
+          invalid_by_father++;
+          c_iter->RecordDrop(value_copy);
+          c_iter->Next();
+          continue;
+        } else if (father_number < lsm_index.file_number) {
           //shadow key is outdated
-          // outdated_shadow++;
-          // Slice copy = cache_value;
-          // c_iter->RecordDrop(copy);
-          // (*cache_deletion_)[c_iter->user_key().ToString()] = cache_value;
+          outdated_shadow++;
+          Slice to_drop = cache_value;
+          c_iter->RecordDrop(to_drop);
+          (*cache_deletion_)[c_iter->user_key().ToString()] = cache_value;
         } else {
           //shadow key is the same as current key, merge them(替换value)
           success_merge++;
@@ -1561,8 +1564,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
   }
   ROCKS_LOG_INFO(db_options_.info_log,
-                 "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_seq: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_seq, success_merge, outdated_shadow);
-  //fprintf(stderr, "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_seq: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_seq, success_merge, outdated_shadow);
+                 "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_father: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_father, success_merge, outdated_shadow);
+  fprintf(stderr, "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_father: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_father, success_merge, outdated_shadow);
 
   sub_compact->compaction_job_stats.num_blobs_read =
       c_iter_stats.num_blobs_read;

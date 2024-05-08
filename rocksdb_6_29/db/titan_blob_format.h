@@ -178,7 +178,7 @@ struct TitanBlobHandle {
 // index to locate actual value from blob file.
 struct TitanBlobIndex {
   enum Type : unsigned char {
-    kTitanBlobRecord = 1,
+    kBlobRecord = 1,
   };
   uint64_t file_number{0};
   TitanBlobHandle blob_handle;
