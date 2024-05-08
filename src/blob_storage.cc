@@ -250,7 +250,8 @@ void BlobStorage::ComputeGCScore() {
     } else {
       //gcs.score = file.second->GetDiscardableRatio();
       //use bitset to calculate the score
-      gcs.score = 1 - (file.second->GetLiveDataSize() / file.second->GetLiveDataBitsetSize());
+      gcs.score = 1.0 - ((double)(file.second->GetLiveDataSize()) / file.second->GetLiveDataBitsetSize());
+      //fprintf(stderr, "live data size: %ld, live data bitset size: %ld, live data ratio:%lf, gc score: %lf\n", file.second->GetLiveDataSize(), file.second->GetLiveDataBitsetSize(), ((double)(file.second->GetLiveDataSize()) / file.second->GetLiveDataBitsetSize()), gcs.score);
     }
   }
 

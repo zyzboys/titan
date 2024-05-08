@@ -41,6 +41,7 @@ std::unique_ptr<BlobGC> BasicBlobGCPicker::PickBlobGC(
       continue;
     }
     if (!stop_picking) {
+      //fprintf(stderr,"file:%ld, gc score: %lf\n", gc_score.file_number, gc_score.score);
       blob_files.emplace_back(blob_file);
       if (blob_file->file_size() <= cf_options_.merge_small_file_threshold) {
         RecordTick(statistics(stats_), TITAN_GC_SMALL_FILE, 1);
