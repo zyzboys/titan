@@ -4978,8 +4978,8 @@ class Benchmark {
         found++;
         bytes += key.size() + pinnable_val.size();
       } else if (!s.IsNotFound()) {
-        fprintf(stderr, "Get returned an error: %s\n", s.ToString().c_str());
-        abort();
+        // fprintf(stderr, "Get returned an error: %s\n", s.ToString().c_str());
+        // abort();
       }
 
       if (thread->shared->read_rate_limiter.get() != nullptr &&

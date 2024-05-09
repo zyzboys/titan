@@ -270,8 +270,7 @@ Status BlobGCJob::DoRunGC() {
       // }       
 
       //未开启shadow_cache或者shadow_cache中没有该key，正常检查
-      if (!in_shadow) {
-        if (blob_gc_->titan_cf_options().drop_key_bitset) {
+      if (blob_gc_->titan_cf_options().drop_key_bitset) {
         s = DiscardEntryWithBitset(blob_index, &discardable);
         if (!s.ok()) {
           break;
@@ -283,11 +282,10 @@ Status BlobGCJob::DoRunGC() {
             break;
           }
         }
-        } else {
-          s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
-          if (!s.ok()) {
-            break;
-          }
+      } else {
+        s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);
+        if (!s.ok()) {
+          break;
         }
       }
     }
@@ -733,6 +731,8 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
     //fprintf(stderr, "wrong discardable, get filenum:%ld, gc filenum:%ld\n", other_blob_index.file_number, blob_index.file_number);
     //当lsm里面的filenumber比gc的大时才丢弃，如果lsm的比gc的小，说明还没来得及合入lsm，可能在shadow里
     *discardable = true;
+  } else {
+    *discardable = false;
   }
   return Status::OK();
 }

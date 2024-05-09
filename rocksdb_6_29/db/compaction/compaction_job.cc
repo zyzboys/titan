@@ -1565,7 +1565,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   }
   ROCKS_LOG_INFO(db_options_.info_log,
                  "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_father: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_father, success_merge, outdated_shadow);
-  fprintf(stderr, "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_father: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_father, success_merge, outdated_shadow);
+  //fprintf(stderr, "compaction_check_key: %lu, key_in_cache: %lu, invalid_by_father: %lu, success_merge: %lu, outdated_shadow: %lu\n", compaction_check_key, key_in_cache, invalid_by_father, success_merge, outdated_shadow);
 
   sub_compact->compaction_job_stats.num_blobs_read =
       c_iter_stats.num_blobs_read;

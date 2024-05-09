@@ -17,21 +17,21 @@ Status BlobStorage::Get(const ReadOptions& options, const BlobIndex& index,
       Slice copy = cache_value;
       redirect.DecodeFrom(&copy);
       if (redirect.file_number < index.file_number) {
-        fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, but shadow file number is smaller\n", index.file_number, redirect.file_number);
-        return Status::Corruption("Missing blob file: " +
+        //fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, but shadow file number is smaller\n", index.file_number, redirect.file_number);
+        return Status::Corruption("Missing blob file1: " +
                               std::to_string(index.file_number));
       }
       sfile = FindFile(redirect.file_number).lock();
       if (!sfile) {
-        fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, but shadow file number is missing\n", index.file_number, redirect.file_number);
-        return Status::Corruption("Missing blob file: " +
+        //fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, but shadow file number is missing\n", index.file_number, redirect.file_number);
+        return Status::Corruption("Missing blob file2: " +
                               std::to_string(redirect.file_number));
       }
     } else {
-      return Status::Corruption("Missing blob file: " +
+      return Status::Corruption("Missing blob file3: " +
                               std::to_string(index.file_number));
     }
-    fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, success\n", index.file_number, redirect.file_number);
+    //fprintf(stderr, "BlobStorage::Get: file_number %ld not found, use shadow file %ld, success\n", index.file_number, redirect.file_number);
   }
   return file_cache_->Get(options, sfile->file_number(), sfile->file_size(),
                           index.blob_handle, record, buffer);
