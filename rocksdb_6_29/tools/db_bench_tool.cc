@@ -1320,9 +1320,9 @@ DEFINE_double(sine_c, 0, "C in f(x) = A sin(bx + c) + d");
 
 DEFINE_double(sine_d, 1, "D in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(ycsb_warmup_ratio, 0.5, "ycsb warm up ratio");
+DEFINE_double(ycsb_warmup_ratio, 0, "ycsb warm up ratio");
 
-DEFINE_double(ycsb_zipf_const, 0.99, "ycsb zipfian constant");
+DEFINE_double(ycsb_zipf_const, 0.9, "ycsb zipfian constant");
 
 DEFINE_bool(ycsb_uniform_distribution, false,
             "Use uniform distribution for YCSB workload");
@@ -3526,19 +3526,19 @@ class Benchmark {
         method = &Benchmark::WriteRandom;
       } else if (name == "ycsbwklda") {
         FLAGS_use_existing_db = true;
-        FLAGS_ycsb_warmup_ratio = 0.5;
+        //FLAGS_ycsb_warmup_ratio = 0.5
         method = &Benchmark::YCSBWorkloadA;
       } else if (name == "ycsbwkldb") {
         FLAGS_use_existing_db = true;
-        FLAGS_ycsb_warmup_ratio = 0.5;
+        //FLAGS_ycsb_warmup_ratio = 0.5
         method = &Benchmark::YCSBWorkloadB;
       } else if (name == "ycsbwkldc") {
         FLAGS_use_existing_db = true;
-        FLAGS_ycsb_warmup_ratio = 0.5;
+        //FLAGS_ycsb_warmup_ratio = 0.5
         method = &Benchmark::YCSBWorkloadC;
       } else if (name == "ycsbwkldd") {
         FLAGS_use_existing_db = true;
-        FLAGS_ycsb_warmup_ratio = 0.5;
+        //FLAGS_ycsb_warmup_ratio = 0.5
         method = &Benchmark::YCSBWorkloadD;
       } else if (name == "ycsbwklde") {
         FLAGS_use_existing_db = true;
