@@ -3,7 +3,6 @@
 #include <unordered_map>
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
-#include "blob_format.h"
 #include "db/titan_blob_format.h"
 
 

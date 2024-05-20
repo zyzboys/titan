@@ -830,6 +830,8 @@ Status BlobGCJob::InstallOutputShadowCache() {
 
 Status BlobGCJob::InstallOutputBlobFiles() {
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputBlobFiles()");
+  StopWatch gc_sw(env_->GetSystemClock().get(), statistics(stats_),
+                    TITAN_GC_WRITE_MICROS);
   Status s;
   std::vector<
       std::pair<std::shared_ptr<BlobFileMeta>, std::unique_ptr<BlobFileHandle>>>

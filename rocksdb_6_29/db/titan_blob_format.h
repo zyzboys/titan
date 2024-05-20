@@ -4,7 +4,6 @@
 #include "table/format.h"
 #include "util/crc32c.h"
 
-#include "util.h"
 namespace ROCKSDB_NAMESPACE {
 
 class TitanOwnedSlice : public Slice {
