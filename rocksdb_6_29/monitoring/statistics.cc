@@ -30,6 +30,8 @@ extern const std::vector<std::string> TitanTickersName = {
     "titandb.blob.file.synced",
     "titandb.gc.num.files",
     "titandb.gc.num.new.files",
+    "titandb.gc.num.keys.total",
+    "titandb.gc.num.keys.overwritten.bitset",
     "titandb.gc.num.keys.overwritten.check",
     "titandb.gc.num.keys.overwritten.callback",
     "titandb.gc.num.keys.relocated",
