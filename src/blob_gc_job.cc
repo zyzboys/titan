@@ -138,6 +138,10 @@ BlobGCJob::~BlobGCJob() {
              metrics_.gc_bytes_written_lsm);
   RecordTick(statistics(stats_), TITAN_GC_BYTES_WRITTEN_BLOB,
              metrics_.gc_bytes_written_blob);
+  RecordTick(statistics(stats_), TITAN_GC_NUM_KEYS_TOTAL,
+             metrics_.gc_num_keys_total);
+  RecordTick(statistics(stats_), TITAN_GC_NUM_KEYS_OVERWRITTEN_BITSET,
+             metrics_.gc_num_keys_overwritten_bitset);
   RecordTick(statistics(stats_), TITAN_GC_NUM_KEYS_OVERWRITTEN_CHECK,
              metrics_.gc_num_keys_overwritten_check);
   RecordTick(statistics(stats_), TITAN_GC_NUM_KEYS_OVERWRITTEN_CALLBACK,
@@ -235,6 +239,7 @@ Status BlobGCJob::DoRunGC() {
   gc_iter->SeekToFirst();
   assert(gc_iter->Valid());
   for (; gc_iter->Valid(); gc_iter->Next()) {
+    metrics_.gc_num_keys_total++;
     total_count++;
     if (IsShutingDown()) {
       s = Status::ShutdownInProgress();
@@ -281,6 +286,8 @@ Status BlobGCJob::DoRunGC() {
           if (!s.ok()) {
             break;
           }
+        } else {
+          metrics_.gc_num_keys_overwritten_bitset++;
         }
       } else {
         s = DiscardEntry(gc_iter->key(), blob_index, &discardable, &level, &seq);

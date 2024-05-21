@@ -1320,6 +1320,8 @@ DEFINE_double(sine_c, 0, "C in f(x) = A sin(bx + c) + d");
 
 DEFINE_double(sine_d, 1, "D in f(x) = A sin(bx + c) + d");
 
+DEFINE_int64(ycsb_num, -1, "Number of ycsb keys(if -1, means use --num)");
+
 DEFINE_double(ycsb_warmup_ratio, 0, "ycsb warm up ratio");
 
 DEFINE_double(ycsb_zipf_const, 0.9, "ycsb zipfian constant");
@@ -3979,8 +3981,11 @@ class Benchmark {
 			init_zipf_generator(0, FLAGS_num, FLAGS_ycsb_zipf_const);
 
       long shard_size = FLAGS_num/FLAGS_threads;
+      if (FLAGS_ycsb_num == -1) {
+        FLAGS_ycsb_num = FLAGS_num;
+      }
 
-      for (int i = 0; i < FLAGS_num; i++) {
+      for (int i = 0; i < FLAGS_ycsb_num; i++) {
         uint64_t k;
         if (FLAGS_ycsb_uniform_distribution) { //Generate number from uniform distribution
           //fprintf(stderr, "random distribution\n");

@@ -4499,9 +4499,9 @@ int main(int argc, char** argv) {
   ParseCommandLineFlags(&argc, &argv, true);
 
   if (FLAGS_statistics) {
-    dbstats = rocksdb::CreateDBStatistics<214,70>();
+    dbstats = rocksdb::CreateDBStatistics<216,70>();
     if (FLAGS_enable_secondary) {
-      dbstats_secondaries = rocksdb::CreateDBStatistics<214,70>();
+      dbstats_secondaries = rocksdb::CreateDBStatistics<216,70>();
     }
   }
   FLAGS_compression_type_e =

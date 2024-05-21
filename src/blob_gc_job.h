@@ -91,6 +91,8 @@ class BlobGCJob {
     uint64_t gc_bytes_read_callback = 0;
     uint64_t gc_bytes_written_lsm = 0;
     uint64_t gc_bytes_written_blob = 0;
+    uint64_t gc_num_keys_total = 0;
+    uint64_t gc_num_keys_overwritten_bitset = 0;
     uint64_t gc_num_keys_overwritten_check = 0;
     uint64_t gc_num_keys_overwritten_callback = 0;
     uint64_t gc_bytes_overwritten_check = 0;

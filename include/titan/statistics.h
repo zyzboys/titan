@@ -22,6 +22,8 @@ enum TickerType : uint32_t {
   TITAN_GC_NUM_FILES,
   TITAN_GC_NUM_NEW_FILES,
 
+  TITAN_GC_NUM_KEYS_TOTAL,
+  TITAN_GC_NUM_KEYS_OVERWRITTEN_BITSET,
   // the number of keys overwritten by foreground within the span of GC
   TITAN_GC_NUM_KEYS_OVERWRITTEN_CHECK,
   TITAN_GC_NUM_KEYS_OVERWRITTEN_CALLBACK,
@@ -77,6 +79,8 @@ const std::vector<std::pair<TickerType, std::string>> TitanTickersNameMap = {
     {TITAN_BLOB_FILE_SYNCED, "titandb.blob.file.synced"},
     {TITAN_GC_NUM_FILES, "titandb.gc.num.files"},
     {TITAN_GC_NUM_NEW_FILES, "titandb.gc.num.new.files"},
+    {TITAN_GC_NUM_KEYS_TOTAL, "titandb.gc.num.keys.total"},
+    {TITAN_GC_NUM_KEYS_OVERWRITTEN_BITSET, "titandb.gc.num.keys.overwritten.bitset"},
     {TITAN_GC_NUM_KEYS_OVERWRITTEN_CHECK, "titandb.gc.num.keys.overwritten.check"},
     {TITAN_GC_NUM_KEYS_OVERWRITTEN_CALLBACK, "titandb.gc.num.keys.overwritten.callback"},
     {TITAN_GC_NUM_KEYS_RELOCATED, "titandb.gc.num.keys.relocated"},
