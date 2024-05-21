@@ -10,7 +10,7 @@ do
 
 done
 
-for skewness in 0 0.3 0.6 0.9
+#for skewness in 0 0.3 0.6 0.9
 # do  
 #     entry_count=$((target_size_bytes / (1024 + 16)))
 #     echo "entry count: $entry_count"
