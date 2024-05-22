@@ -420,7 +420,7 @@ DEFINE_double(read_random_exp_range, 0.0,
               "The larger the number is, the more skewed the reads are. "
               "Only used in readrandom and multireadrandom benchmarks.");
 
-DEFINE_bool(histogram, false, "Print histogram of operation timings");
+DEFINE_bool(histogram, true, "Print histogram of operation timings");
 
 DEFINE_bool(enable_numa, false,
             "Make operations aware of NUMA architecture and bind memory "
@@ -3550,7 +3550,6 @@ class Benchmark {
         method = &Benchmark::YCSBWorkloadF;
       } else if (name == "ycsbfilldb") {
         fresh_db = true;
-        FLAGS_ycsb_warmup_ratio = 0;
         method = &Benchmark::YCSBFillDB;
       } else if (name == "fill100K") {
         fresh_db = true;
