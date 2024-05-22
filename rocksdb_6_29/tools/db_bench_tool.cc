@@ -3998,6 +3998,9 @@ class Benchmark {
         //fprintf(stderr, "Generate %llu\n", k);
 
         int p = k / shard_size;
+        if (p >= n || p < 0) {
+          continue;
+        }
         threadKeys_[p]->push_back(k);
       }
       for (int i = 0; i < n; i++) {
