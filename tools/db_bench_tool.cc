@@ -6235,7 +6235,7 @@ class Benchmark {
     std::vector<uint64_t> *keys = threadKeys_[thread->tid];
     int total = keys->size();
     int warm_up_num = total * FLAGS_ycsb_warmup_ratio;
-    fprintf(stdout, "start warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "start warmup: %d entries\n", warm_up_num);
     for (int i = 0; i < warm_up_num; i++) {
       int k = keys->at(i);
       //std::cout<<"rand: "<<rand_tmp<<std::endl;
@@ -6255,7 +6255,7 @@ class Benchmark {
       }      
     
     }
-    fprintf(stdout, "end warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "end warmup: %d entries\n", warm_up_num);
     // the number of iterations is the larger of read_ or write_
     if (FLAGS_ycsb_warmup_ratio != 0) {
       thread->stats.Start(thread->tid);//warm up之后重新计时
@@ -6332,7 +6332,7 @@ class Benchmark {
     int total = keys->size();
 
     int warm_up_num = total * FLAGS_ycsb_warmup_ratio;
-    fprintf(stdout, "start warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "start warmup: %d entries\n", warm_up_num);
     for (int i = 0; i < warm_up_num; i++) {
       int k = keys->at(i);
       //std::cout<<"rand: "<<rand_tmp<<std::endl;
@@ -6352,7 +6352,7 @@ class Benchmark {
       }      
     
     }
-    fprintf(stdout, "end warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "end warmup: %d entries\n", warm_up_num);
     if (FLAGS_ycsb_warmup_ratio != 0) {
       thread->stats.Start(thread->tid);//warm up之后重新计时
     }
@@ -6420,7 +6420,7 @@ class Benchmark {
     int writes_done = 0;
     int warm_up_num = total * FLAGS_ycsb_warmup_ratio;
 
-    fprintf(stdout, "start warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "start warmup: %d entries\n", warm_up_num);
     for (int i = 0; i < warm_up_num; i++) {
       int k = keys->at(i);
       //std::cout<<"rand: "<<rand_tmp<<std::endl;
@@ -6441,7 +6441,7 @@ class Benchmark {
       }      
     
     }
-    fprintf(stdout, "end warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "end warmup: %d entries\n", warm_up_num);
     if (FLAGS_ycsb_warmup_ratio != 0) {
       thread->stats.Start(thread->tid);//warm up之后重新计时
     }
@@ -6511,7 +6511,7 @@ class Benchmark {
 
     int warm_up_num = total * FLAGS_ycsb_warmup_ratio;
 
-    fprintf(stdout, "start warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "start warmup: %d entries\n", warm_up_num);
     for (int i = 0; i < warm_up_num; i++) {
       int k = keys->at(i);
       //std::cout<<"rand: "<<rand_tmp<<std::endl;
@@ -6532,7 +6532,7 @@ class Benchmark {
       }      
     
     }
-    fprintf(stdout, "end warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "end warmup: %d entries\n", warm_up_num);
     if (FLAGS_ycsb_warmup_ratio != 0) {
       thread->stats.Start(thread->tid);//warm up之后重新计时
     }
