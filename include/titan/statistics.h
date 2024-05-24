@@ -123,6 +123,8 @@ enum HistogramType : uint32_t {
 
   TITAN_GC_MICROS,
   TITAN_GC_CHECK_MICROS,
+  TITAN_GC_CHECK_BITSET_MICROS,
+  TITAN_GC_CHECK_LSM_MICROS,
   TITAN_GC_WRITE_MICROS,
   TITAN_GC_WRITEBACK_MICROS,
   TITAN_GC_INPUT_FILE_SIZE,
@@ -148,6 +150,8 @@ const std::vector<std::pair<HistogramType, std::string>>
 
         {TITAN_GC_MICROS, "titandb.gc.micros"},
         {TITAN_GC_CHECK_MICROS, "titandb.gc.check.micros"},
+        {TITAN_GC_CHECK_BITSET_MICROS, "titandb.gc.check.bitset.micros"},
+        {TITAN_GC_CHECK_LSM_MICROS, "titandb.gc.check.lsm.micros"},
         {TITAN_GC_WRITE_MICROS, "titandb.gc.write.micros"},
         {TITAN_GC_WRITEBACK_MICROS, "titandb.gc.writeback.micros"},
         {TITAN_GC_INPUT_FILE_SIZE, "titandb.gc.input.file.size"},

@@ -675,6 +675,8 @@ Status BlobGCJob::DiscardEntryWithShadow(const Slice& key, const BlobIndex& blob
 
 Status BlobGCJob::DiscardEntryWithBitset(const BlobIndex &blob_index, bool *discardable) {
   assert(discardable != nullptr);
+  StopWatch gc_sw(env_->GetSystemClock().get(), statistics(stats_),
+                    TITAN_GC_CHECK_BITSET_MICROS);
   std::shared_ptr<BlobFileMeta> file;
   // find blob file meta
   for (const auto& f : blob_gc_->inputs()) {
@@ -699,6 +701,8 @@ Status BlobGCJob::DiscardEntryWithBitset(const BlobIndex &blob_index, bool *disc
 
 Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
                                bool* discardable, int* level, SequenceNumber* seq) {
+  StopWatch gc_sw(env_->GetSystemClock().get(), statistics(stats_),
+                    TITAN_GC_CHECK_LSM_MICROS);
   TitanStopWatch sw(env_, metrics_.gc_read_lsm_micros);
   assert(discardable != nullptr);
   PinnableSlice index_entry;

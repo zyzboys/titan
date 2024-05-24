@@ -278,6 +278,8 @@ const std::vector<std::string> TitanHistogramsName = {
     "titandb.manifest.file.sync.micros",
     "titandb.gc.micros",
     "titandb.gc.check.micros",
+    "titandb.gc.check.bitset.micros",
+    "titandb.gc.check.lsm.micros",
     "titandb.gc.write.micros",
     "titandb.gc.writeback.micros",
     "titandb.gc.input.file.size",
