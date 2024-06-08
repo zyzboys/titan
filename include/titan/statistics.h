@@ -12,6 +12,7 @@ enum TickerType : uint32_t {
   TITAN_NUM_SEEK,
   TITAN_NUM_NEXT,
   TITAN_NUM_PREV,
+  TITAN_NUM_GET_MISS,
 
   TITAN_BLOB_FILE_NUM_KEYS_WRITTEN,
   TITAN_BLOB_FILE_NUM_KEYS_READ,
@@ -72,6 +73,7 @@ const std::vector<std::pair<TickerType, std::string>> TitanTickersNameMap = {
     {TITAN_NUM_SEEK, "titandb.num.seek"},
     {TITAN_NUM_NEXT, "titandb.num.next"},
     {TITAN_NUM_PREV, "titandb.num.prev"},
+    {TITAN_NUM_GET_MISS, "titandb.num.get.miss"},
     {TITAN_BLOB_FILE_NUM_KEYS_WRITTEN, "titandb.blob.file.num.keys.written"},
     {TITAN_BLOB_FILE_NUM_KEYS_READ, "titandb.blob.file.num.keys.read"},
     {TITAN_BLOB_FILE_BYTES_WRITTEN, "titandb.blob.file.bytes.written"},

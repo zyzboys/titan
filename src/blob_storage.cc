@@ -10,6 +10,7 @@ Status BlobStorage::Get(const ReadOptions& options, const BlobIndex& index,
                         BlobRecord* record, PinnableSlice* buffer, const Slice& key, ShadowSet* shadow_set) {
   auto sfile = FindFile(index.file_number).lock();
   if (!sfile) {
+    RecordTick(statistics(stats_.get()), TITAN_NUM_GET_MISS);
     // If the file is not found, it may be in the shadow set
     BlobIndex redirect;
     std::string cache_value;
