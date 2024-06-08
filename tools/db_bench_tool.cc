@@ -4967,7 +4967,13 @@ class Benchmark {
           key_rand += FLAGS_multiread_stride;
         }
       } else {
-        key_rand = GetRandomKey(&thread->rand);
+        if (FLAGS_zipfian) {
+            rand_num = nextValue() % FLAGS_num;
+            Random64 rand_local(rand_num);
+            rand_num = rand_local.Next() % FLAGS_num;
+          } else {
+            rand_num = key_gens[id]->Next();
+          }
       }
       GenerateKeyFromInt(key_rand, FLAGS_num, &key);
       read++;
