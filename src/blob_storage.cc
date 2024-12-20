@@ -10,7 +10,7 @@ Status BlobStorage::Get(const ReadOptions& options, const BlobIndex& index,
                         BlobRecord* record, PinnableSlice* buffer, const Slice& key, ShadowSet* shadow_set) {
   auto sfile = FindFile(index.file_number).lock();
   if (!sfile) {
-    RecordTick(statistics(stats_.get()), TITAN_NUM_GET_MISS);
+    RecordTick(statistics(stats_), TITAN_NUM_GET_MISS);
     // If the file is not found, it may be in the shadow set
     BlobIndex redirect;
     std::string cache_value;
@@ -232,6 +232,8 @@ void BlobStorage::GetAllFiles(std::vector<std::string>* files) {
 }
 
 void BlobStorage::ComputeGCScore() {
+  // TODO: compute gc score for each partition
+  // TODO: GC后生成的blobfile的score需要单独计算，因为其index可能在shadow cache里
   // TODO: no need to recompute all everytime
   MutexLock l(&mutex_);
   gc_score_.clear();

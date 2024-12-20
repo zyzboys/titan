@@ -24,6 +24,43 @@ struct ShadowScore {
   double score;
 };
 
+class RedirectMap {
+  public:
+    RedirectMap() {}
+    ~RedirectMap() {}
+
+    void AddMulti(std::unordered_map<uint64_t, uint64_t>& redirect_map_diff) {
+      MutexLock l(&redirect_mutex_);
+      for (auto& entry_diff : redirect_map_diff) {
+        if(redirect_map_.find(entry_diff.first) == redirect_map_.end()) {
+          redirect_map_[entry_diff.first] = entry_diff.second;
+        } else {
+          redirect_map_[entry_diff.first] += entry_diff.second;
+        }
+      }
+    }
+
+    uint64_t GetRedirectNum(uint64_t file_number) {
+      MutexLock l(&redirect_mutex_);
+      auto it = redirect_map_.find(file_number);
+      if (it != redirect_map_.end()) {
+        return it->second;
+      }
+      return 0;
+    }
+
+    void PrintBrief() {
+      MutexLock l(&redirect_mutex_);
+      for (auto& it : redirect_map_) {
+        std::cout<<"sst file number: "<<it.first<<" redirect entries: "<<it.second<<std::endl;
+      }
+    }
+
+  private:
+    mutable port::Mutex redirect_mutex_; 
+    std::unordered_map<uint64_t, uint64_t> redirect_map_;//sst file number -> redirect entries num
+};
+
 class ShadowCache {
   public:
     ShadowCache() {}
@@ -205,6 +242,7 @@ public:
   // void DeleteCacheMuti(std::unordered_map<std::string, std::string>& cache_deletion);
 
   ShadowCache* GetShadowCache() { return &shadow_cache_; }
+  RedirectMap* GetRedirectEntrisMap() { return &redirect_map_; }
 
   class FileLocation {
    public:
@@ -238,6 +276,7 @@ public:
   std::vector<ShadowScore> shadow_scores_;
   // userkey-><value>
   ShadowCache shadow_cache_;
+  RedirectMap redirect_map_;
   // List of guards per level which are persisted to disk and already committed to a MANIFEST
   //std::vector<GuardMetaData*> guards_[LSM_MAX_LEVEL];
   std::unordered_map<uint64_t, FileLocation> file_locations_;

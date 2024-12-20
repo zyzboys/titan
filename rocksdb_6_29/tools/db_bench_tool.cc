@@ -6043,13 +6043,14 @@ class Benchmark {
           key_rand += FLAGS_multiread_stride;
         }
       } else {
-        if (FLAGS_zipfian) {
-            rand_num = nextValue() % FLAGS_num;
-            Random64 rand_local(rand_num);
-            rand_num = rand_local.Next() % FLAGS_num;
-          } else {
-            rand_num = key_gens[id]->Next();
-          }
+        // if (FLAGS_zipfian) {
+        //     rand_num = nextValue() % FLAGS_num;
+        //     Random64 rand_local(rand_num);
+        //     rand_num = rand_local.Next() % FLAGS_num;
+        //   } else {
+        //     rand_num = key_gens[id]->Next();
+        //   }
+        key_rand = GetRandomKey(&thread->rand);
       }
       GenerateKeyFromInt(key_rand, FLAGS_num, &key);
       read++;

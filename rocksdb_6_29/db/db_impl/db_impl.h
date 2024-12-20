@@ -560,6 +560,8 @@ class DBImpl : public DB {
 
     bool return_level = false;
     int level = -1;
+    bool set_redirect = false;
+    uint64_t redirect_file_number = -1;
     SequenceNumber seq = kMaxSequenceNumber;
   };
 

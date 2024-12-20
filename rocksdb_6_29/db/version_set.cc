@@ -137,7 +137,8 @@ class FilePicker {
         ikey_(ikey),
         file_indexer_(file_indexer),
         user_comparator_(user_comparator),
-        internal_comparator_(internal_comparator) {
+        internal_comparator_(internal_comparator),
+        hit_file_number_(static_cast<uint64_t>(-1)) {
     // Setup member variables to search first level.
     search_ended_ = !PrepareNextLevel();
     if (!search_ended_) {
@@ -159,6 +160,11 @@ class FilePicker {
         // Loops over all files in current level.
         FdWithKeyRange* f = &curr_file_level_->files[curr_index_in_curr_level_];
         hit_file_level_ = curr_level_;
+        hit_file_number_ = f->file_metadata->fd.GetNumber();
+        if (f->file_metadata->num_redirect_entries != 0) {
+          std::cout<<"in version_set, sst number: "<< hit_file_number_<<",";
+          std::cout<<"redirect entries num: "<< f->file_metadata->num_redirect_entries<<std::endl;
+        }
         is_hit_file_last_in_level_ =
             curr_index_in_curr_level_ == curr_file_level_->num_files - 1;
         int cmp_largest = -1;
@@ -228,15 +234,19 @@ class FilePicker {
   // for GET_HIT_L0, GET_HIT_L1 & GET_HIT_L2_AND_UP counts
   unsigned int GetHitFileLevel() { return hit_file_level_; }
 
+  uint64_t GetHitFileNumber() { return hit_file_number_; }
+
   // Returns true if the most recent "hit file" (i.e., one returned by
   // GetNextFile()) is at the last index in its level.
   bool IsHitFileLastInLevel() { return is_hit_file_last_in_level_; }
+
 
  private:
   unsigned int num_levels_;
   unsigned int curr_level_;
   unsigned int returned_file_level_;
   unsigned int hit_file_level_;
+  uint64_t hit_file_number_;
   int32_t search_left_bound_;
   int32_t search_right_bound_;
   autovector<LevelFilesBrief>* level_files_brief_;
@@ -1756,6 +1766,53 @@ VersionStorageInfo::VersionStorageInfo(
   }
 }
 
+VersionStorageInfo::VersionStorageInfo(
+    const InternalKeyComparator* internal_comparator,
+    const Comparator* user_comparator, int levels,
+    CompactionStyle compaction_style, VersionStorageInfo* ref_vstorage,
+    bool _force_consistency_checks, ShadowSet* shadow_set)
+    : internal_comparator_(internal_comparator),
+      user_comparator_(user_comparator),
+      // cfd is nullptr if Version is dummy
+      num_levels_(levels),
+      num_non_empty_levels_(0),
+      file_indexer_(user_comparator),
+      compaction_style_(compaction_style),
+      files_(new std::vector<FileMetaData*>[num_levels_]),
+      base_level_(num_levels_ == 1 ? -1 : 1),
+      level_multiplier_(0.0),
+      files_by_compaction_pri_(num_levels_),
+      level0_non_overlapping_(false),
+      next_file_to_compact_by_size_(num_levels_),
+      compaction_score_(num_levels_),
+      compaction_level_(num_levels_),
+      l0_delay_trigger_count_(0),
+      accumulated_file_size_(0),
+      accumulated_raw_key_size_(0),
+      accumulated_raw_value_size_(0),
+      accumulated_num_non_deletions_(0),
+      accumulated_num_deletions_(0),
+      current_num_non_deletions_(0),
+      current_num_deletions_(0),
+      current_num_samples_(0),
+      estimated_compaction_needed_bytes_(0),
+      finalized_(false),
+      force_consistency_checks_(_force_consistency_checks),
+      shadow_set_(shadow_set) {
+  if (ref_vstorage != nullptr) {
+    accumulated_file_size_ = ref_vstorage->accumulated_file_size_;
+    accumulated_raw_key_size_ = ref_vstorage->accumulated_raw_key_size_;
+    accumulated_raw_value_size_ = ref_vstorage->accumulated_raw_value_size_;
+    accumulated_num_non_deletions_ =
+        ref_vstorage->accumulated_num_non_deletions_;
+    accumulated_num_deletions_ = ref_vstorage->accumulated_num_deletions_;
+    current_num_non_deletions_ = ref_vstorage->current_num_non_deletions_;
+    current_num_deletions_ = ref_vstorage->current_num_deletions_;
+    current_num_samples_ = ref_vstorage->current_num_samples_;
+    oldest_snapshot_seqnum_ = ref_vstorage->oldest_snapshot_seqnum_;
+  }
+}
+
 Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
                  const FileOptions& file_opt,
                  const MutableCFOptions mutable_cf_options,
@@ -1779,7 +1836,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
           (cfd_ == nullptr || cfd_->current() == nullptr)
               ? nullptr
               : cfd_->current()->storage_info(),
-          cfd_ == nullptr ? false : cfd_->ioptions()->force_consistency_checks),
+          cfd_ == nullptr ? false : cfd_->ioptions()->force_consistency_checks, cfd_ == nullptr ? nullptr : cfd_->shadow_set()),
       vset_(vset),
       next_(this),
       prev_(this),
@@ -1969,7 +2026,7 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
                   SequenceNumber* max_covering_tombstone_seq,
                   PinnedIteratorsManager* pinned_iters_mgr, bool* value_found,
                   bool* key_exists, SequenceNumber* seq, ReadCallback* callback,
-                  bool* is_blob, bool do_merge, bool return_level, int* level) {
+                  bool* is_blob, bool do_merge, bool return_level, int* level, bool set_redirect, uint64_t* redirect_file_number){
   Slice ikey = k.internal_key();
   Slice user_key = k.user_key();
 
@@ -2069,6 +2126,9 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         }
         if (return_level) {
           *level = fp.GetHitFileLevel();
+        }
+        if (set_redirect) {
+          *redirect_file_number = fp.GetHitFileNumber();
         }
         //std::cout << "found level: " << fp.GetHitFileLevel() << std::endl;
         PERF_COUNTER_BY_LEVEL_ADD(user_key_return_count, 1,
@@ -3370,6 +3430,12 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     // don't need this
     return;
   }
+  // if (GetShadowSet() == nullptr) {
+  //   std::cout<<"version_storage_info.cc: GetShadowSet() == nullptr"<<std::endl;
+  // } else {
+  //   GetShadowSet()->GetRedirectEntrisMap()->PrintBrief();
+  //   std::cout<<std::endl;
+  // }
   // No need to sort the highest level because it is never compacted.
   for (int level = 0; level < num_levels() - 1; level++) {
     const std::vector<FileMetaData*>& files = files_[level];

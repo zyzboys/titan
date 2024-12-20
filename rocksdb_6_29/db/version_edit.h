@@ -207,6 +207,8 @@ struct FileMetaData {
   uint64_t raw_key_size = 0;    // total uncompressed key size.
   uint64_t raw_value_size = 0;  // total uncompressed value size.
 
+  uint64_t num_redirect_entries = 0;  // Number of entries need to redirect in the file
+
   int refs = 0;  // Reference count
 
   bool being_compacted = false;       // Is this file undergoing compaction?

@@ -1922,7 +1922,8 @@ Status DBImpl::GetImpl(const ReadOptions& read_options, const Slice& key,
         nullptr, &get_impl_options.seq,
         get_impl_options.get_value ? get_impl_options.callback : nullptr,
         get_impl_options.get_value ? get_impl_options.is_blob_index : nullptr,
-        get_impl_options.get_value, get_impl_options.return_level, &get_impl_options.level);
+        get_impl_options.get_value, get_impl_options.return_level, &get_impl_options.level, 
+        get_impl_options.set_redirect, &get_impl_options.redirect_file_number);
     RecordTick(stats_, MEMTABLE_MISS);
   }
 

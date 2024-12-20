@@ -513,6 +513,119 @@ ColumnFamilyData::ColumnFamilyData(
     const FileOptions* file_options, ColumnFamilySet* column_family_set,
     BlockCacheTracer* const block_cache_tracer,
     const std::shared_ptr<IOTracer>& io_tracer,
+    const std::string& db_session_id, ShadowSet* shadow_set)
+    : id_(id),
+      name_(name),
+      dummy_versions_(_dummy_versions),
+      current_(nullptr),
+      refs_(0),
+      initialized_(false),
+      dropped_(false),
+      internal_comparator_(cf_options.comparator),
+      initial_cf_options_(SanitizeOptions(db_options, cf_options)),
+      ioptions_(db_options, initial_cf_options_),
+      mutable_cf_options_(initial_cf_options_),
+      is_delete_range_supported_(
+          cf_options.table_factory->IsDeleteRangeSupported()),
+      write_buffer_manager_(write_buffer_manager),
+      mem_(nullptr),
+      imm_(ioptions_.min_write_buffer_number_to_merge,
+           ioptions_.max_write_buffer_number_to_maintain,
+           ioptions_.max_write_buffer_size_to_maintain),
+      super_version_(nullptr),
+      super_version_number_(0),
+      local_sv_(new ThreadLocalPtr(&SuperVersionUnrefHandle)),
+      next_(nullptr),
+      prev_(nullptr),
+      log_number_(0),
+      flush_reason_(FlushReason::kOthers),
+      column_family_set_(column_family_set),
+      queued_for_flush_(false),
+      queued_for_compaction_(false),
+      prev_compaction_needed_bytes_(0),
+      allow_2pc_(db_options.allow_2pc),
+      last_memtable_id_(0),
+      db_paths_registered_(false),
+      shadow_set_(shadow_set) {
+  if (id_ != kDummyColumnFamilyDataId) {
+    // TODO(cc): RegisterDbPaths can be expensive, considering moving it
+    // outside of this constructor which might be called with db mutex held.
+    // TODO(cc): considering using ioptions_.fs, currently some tests rely on
+    // EnvWrapper, that's the main reason why we use env here.
+    Status s = ioptions_.env->RegisterDbPaths(GetDbPaths());
+    if (s.ok()) {
+      db_paths_registered_ = true;
+    } else {
+      ROCKS_LOG_ERROR(
+          ioptions_.logger,
+          "Failed to register data paths of column family (id: %d, name: %s)",
+          id_, name_.c_str());
+    }
+  }
+  Ref();
+
+  // Convert user defined table properties collector factories to internal ones.
+  GetIntTblPropCollectorFactory(ioptions_, &int_tbl_prop_collector_factories_);
+
+  // if _dummy_versions is nullptr, then this is a dummy column family.
+  if (_dummy_versions != nullptr) {
+    internal_stats_.reset(
+        new InternalStats(ioptions_.num_levels, ioptions_.clock, this));
+    table_cache_.reset(new TableCache(ioptions_, file_options, _table_cache,
+                                      block_cache_tracer, io_tracer,
+                                      db_session_id));
+    blob_file_cache_.reset(
+        new BlobFileCache(_table_cache, ioptions(), soptions(), id_,
+                          internal_stats_->GetBlobFileReadHist(), io_tracer));
+
+    if (ioptions_.compaction_style == kCompactionStyleLevel) {
+      compaction_picker_.reset(
+          new LevelCompactionPicker(ioptions_, &internal_comparator_));
+#ifndef ROCKSDB_LITE
+    } else if (ioptions_.compaction_style == kCompactionStyleUniversal) {
+      compaction_picker_.reset(
+          new UniversalCompactionPicker(ioptions_, &internal_comparator_));
+    } else if (ioptions_.compaction_style == kCompactionStyleFIFO) {
+      compaction_picker_.reset(
+          new FIFOCompactionPicker(ioptions_, &internal_comparator_));
+    } else if (ioptions_.compaction_style == kCompactionStyleNone) {
+      compaction_picker_.reset(new NullCompactionPicker(
+          ioptions_, &internal_comparator_));
+      ROCKS_LOG_WARN(ioptions_.logger,
+                     "Column family %s does not use any background compaction. "
+                     "Compactions can only be done via CompactFiles\n",
+                     GetName().c_str());
+#endif  // !ROCKSDB_LITE
+    } else {
+      ROCKS_LOG_ERROR(ioptions_.logger,
+                      "Unable to recognize the specified compaction style %d. "
+                      "Column family %s will use kCompactionStyleLevel.\n",
+                      ioptions_.compaction_style, GetName().c_str());
+      compaction_picker_.reset(
+          new LevelCompactionPicker(ioptions_, &internal_comparator_));
+    }
+
+    if (column_family_set_->NumberOfColumnFamilies() < 10) {
+      ROCKS_LOG_INFO(ioptions_.logger,
+                     "--------------- Options for column family [%s]:\n",
+                     name.c_str());
+      initial_cf_options_.Dump(ioptions_.logger);
+    } else {
+      ROCKS_LOG_INFO(ioptions_.logger, "\t(skipping printing options)\n");
+    }
+  }
+
+  RecalculateWriteStallConditions(mutable_cf_options_,
+                                  ioptions_.rate_limiter.get());
+}
+
+ColumnFamilyData::ColumnFamilyData(
+    uint32_t id, const std::string& name, Version* _dummy_versions,
+    Cache* _table_cache, WriteBufferManager* write_buffer_manager,
+    const ColumnFamilyOptions& cf_options, const ImmutableDBOptions& db_options,
+    const FileOptions* file_options, ColumnFamilySet* column_family_set,
+    BlockCacheTracer* const block_cache_tracer,
+    const std::shared_ptr<IOTracer>& io_tracer,
     const std::string& db_session_id)
     : id_(id),
       name_(name),
@@ -1676,6 +1789,29 @@ ColumnFamilyData* ColumnFamilySet::CreateColumnFamily(
       id, name, dummy_versions, table_cache_, write_buffer_manager_, options,
       *db_options_, &file_options_, this, block_cache_tracer_, io_tracer_,
       db_session_id_);
+  column_families_.insert({name, id});
+  column_family_data_.insert({id, new_cfd});
+  max_column_family_ = std::max(max_column_family_, id);
+  // add to linked list
+  new_cfd->next_ = dummy_cfd_;
+  auto prev = dummy_cfd_->prev_;
+  new_cfd->prev_ = prev;
+  prev->next_ = new_cfd;
+  dummy_cfd_->prev_ = new_cfd;
+  if (id == 0) {
+    default_cfd_cache_ = new_cfd;
+  }
+  return new_cfd;
+}
+
+ColumnFamilyData* ColumnFamilySet::CreateColumnFamilyWithShadow(
+    const std::string& name, uint32_t id, Version* dummy_versions,
+    const ColumnFamilyOptions& options, ShadowSet* shadow_set) {
+  assert(column_families_.find(name) == column_families_.end());
+  ColumnFamilyData* new_cfd = new ColumnFamilyData(
+      id, name, dummy_versions, table_cache_, write_buffer_manager_, options,
+      *db_options_, &file_options_, this, block_cache_tracer_, io_tracer_,
+      db_session_id_, shadow_set);
   column_families_.insert({name, id});
   column_family_data_.insert({id, new_cfd});
   max_column_family_ = std::max(max_column_family_, id);

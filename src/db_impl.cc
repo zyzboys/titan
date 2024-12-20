@@ -669,6 +669,9 @@ Status TitanDBImpl::GetImpl(const ReadOptions& options,
     RecordTick(statistics(stats_.get()), TITAN_BLOB_FILE_BYTES_READ,
                index.blob_handle.size);
   } else {
+    // maybe in shadow cache
+    // first search in shadow cache, if found, lazy insert to LSM
+    // if not found, search in blobfile, then lazy insert to shadow cache
     TITAN_LOG_ERROR(db_options_.info_log,
                     "Column family id:%" PRIu32 " not Found.", handle->GetID());
     return Status::NotFound(

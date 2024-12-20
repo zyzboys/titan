@@ -26,6 +26,7 @@
 #include "rocksdb/options.h"
 #include "trace_replay/block_cache_tracer.h"
 #include "util/thread_local.h"
+#include "db/shadow_set.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -346,6 +347,8 @@ class ColumnFamilyData {
 
   MemTableList* imm() { return &imm_; }
   MemTable* mem() { return mem_; }
+  ShadowSet* shadow_set() { return shadow_set_; }
+  void SetShadowSet(ShadowSet* shadow_set) { shadow_set_ = shadow_set; }
 
   bool IsEmpty() {
     return mem()->GetFirstSequenceNumber() == 0 && imm()->NumNotFlushed() == 0;
@@ -541,6 +544,17 @@ class ColumnFamilyData {
                    ColumnFamilySet* column_family_set,
                    BlockCacheTracer* const block_cache_tracer,
                    const std::shared_ptr<IOTracer>& io_tracer,
+                   const std::string& db_session_id, ShadowSet* shadow_set);
+
+  ColumnFamilyData(uint32_t id, const std::string& name,
+                   Version* dummy_versions, Cache* table_cache,
+                   WriteBufferManager* write_buffer_manager,
+                   const ColumnFamilyOptions& options,
+                   const ImmutableDBOptions& db_options,
+                   const FileOptions* file_options,
+                   ColumnFamilySet* column_family_set,
+                   BlockCacheTracer* const block_cache_tracer,
+                   const std::shared_ptr<IOTracer>& io_tracer,
                    const std::string& db_session_id);
 
   std::vector<std::string> GetDbPaths() const;
@@ -572,6 +586,7 @@ class ColumnFamilyData {
 
   MemTable* mem_;
   MemTableList imm_;
+  ShadowSet* shadow_set_ = nullptr;
   SuperVersion* super_version_;
 
   // An ordinal representing the current SuperVersion. Updated by
@@ -690,6 +705,10 @@ class ColumnFamilySet {
   ColumnFamilyData* CreateColumnFamily(const std::string& name, uint32_t id,
                                        Version* dummy_version,
                                        const ColumnFamilyOptions& options);
+
+  ColumnFamilyData* CreateColumnFamilyWithShadow(const std::string& name, uint32_t id,
+                                       Version* dummy_version,
+                                       const ColumnFamilyOptions& options, ShadowSet* shadow_set);
 
   iterator begin() { return iterator(dummy_cfd_->next_); }
   iterator end() { return iterator(dummy_cfd_); }

@@ -53,6 +53,7 @@
 #include "table/get_context.h"
 #include "table/multiget_context.h"
 #include "trace_replay/block_cache_tracer.h"
+#include "db/shadow_set.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -118,6 +119,11 @@ class VersionStorageInfo {
                      CompactionStyle compaction_style,
                      VersionStorageInfo* src_vstorage,
                      bool _force_consistency_checks);
+  VersionStorageInfo(const InternalKeyComparator* internal_comparator,
+                     const Comparator* user_comparator, int num_levels,
+                     CompactionStyle compaction_style,
+                     VersionStorageInfo* src_vstorage,
+                     bool _force_consistency_checks, ShadowSet* shadow_set);
   // No copying allowed
   VersionStorageInfo(const VersionStorageInfo&) = delete;
   void operator=(const VersionStorageInfo&) = delete;
@@ -297,6 +303,8 @@ class VersionStorageInfo {
   const std::vector<FileMetaData*>& LevelFiles(int level) const {
     return files_[level];
   }
+
+  ShadowSet* GetShadowSet() { return shadow_set_; }
 
   class FileLocation {
    public:
@@ -563,6 +571,7 @@ class VersionStorageInfo {
   // List of files per level, files in each level are arranged
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
+  ShadowSet* shadow_set_;
 
   // Map of all table files in version. Maps file number to (level, position on
   // level).
@@ -787,7 +796,7 @@ class Version {
            PinnedIteratorsManager* pinned_iters_mgr,
            bool* value_found = nullptr, bool* key_exists = nullptr,
            SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr,
-           bool* is_blob = nullptr, bool do_merge = true, bool return_level = false, int* level = nullptr);
+           bool* is_blob = nullptr, bool do_merge = true, bool return_level = false, int* level = nullptr, bool set_redirect = false, uint64_t* redirect_file_number = nullptr);
 
   void MultiGet(const ReadOptions&, MultiGetRange* range,
                 ReadCallback* callback = nullptr);

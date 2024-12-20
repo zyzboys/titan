@@ -211,7 +211,6 @@ Status BlobGCJob::DoRunGC() {
   std::unique_ptr<BlobFileBuilder> blob_file_builder;
 
   ColumnFamilyData *cfd = blob_gc_->GetColumnFamilyData();
-  VersionStorageInfo* vstorage = cfd->current()->storage_info();
   std::vector<std::unique_ptr<ShadowHandle>> shadow_handles(7);
   // for (int i = 0; i < 7; i++) {
   //   shadow_handles[i].reset();
@@ -416,6 +415,14 @@ Status BlobGCJob::DoRunGC() {
                                        " valid key count: %" PRIu64
                                        " discardable key count: %" PRIu64,
                  total_count, valid_count, discardable_count);
+  
+  // for (auto redirect_info : redirect_entries_map_diff_) {
+  //   FileMetaData* meta = vstorage->GetFileMetaDataByNumber(redirect_info.first);
+  //   if (meta) {
+  //     meta->num_redirect_entries = redirect_info.second;
+  //     std::cout << "sst file number: " << redirect_info.first <<" total entries: "<< meta->num_entries<< " redirect entries: " << meta->num_redirect_entries << std::endl;
+  //   }
+  // }
 
   if (gc_iter->status().ok() && s.ok()) {
     if (blob_file_builder && blob_file_handle) {
@@ -713,6 +720,7 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
   gopts.is_blob_index = &is_blob_index;
   // get the level of the key
   gopts.return_level = true;
+  gopts.set_redirect = true;
   Status s = base_db_impl_->GetImpl(ReadOptions(), key, gopts);
   *level = gopts.level;
   *seq = gopts.seq;
@@ -744,6 +752,9 @@ Status BlobGCJob::DiscardEntry(const Slice& key, const BlobIndex& blob_index,
     *discardable = true;
   } else {
     *discardable = false;
+    //std::cout << "file number: " << gopts.redirect_file_number << std::endl;
+    //std::cout << "writeback to shadow cache, redirect entries++" << std::endl;
+    redirect_entries_map_diff_[gopts.redirect_file_number]++;
   }
   return Status::OK();
 }
@@ -796,6 +807,15 @@ Status BlobGCJob::Finish() {
     mutex_->Lock();
   }
 
+  ColumnFamilyData *cfd = blob_gc_->GetColumnFamilyData();
+  if (cfd->shadow_set() == nullptr) {
+    cfd->SetShadowSet(shadow_set_);
+    std::cout<<"set shadow_set in cf"<<std::endl;
+  }
+  if (cfd->shadow_set() == nullptr) {
+    std::cout<<"ERROR: shadow_set is null"<<std::endl;
+  }
+  
   if (s.ok() && !blob_gc_->GetColumnFamilyData()->IsDropped()) {
     s = DeleteInputBlobFiles();
   }
@@ -820,6 +840,9 @@ Status BlobGCJob::InstallOutputShadowCache() {
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadowCache()");
   TITAN_LOG_INFO(db_options_.info_log, "add cache count: %ld\n", cache_addition_.size());
   shadow_set_->GetShadowCache()->AddMulti(cache_addition_, &drop_keys);
+  shadow_set_->GetRedirectEntrisMap()->AddMulti(redirect_entries_map_diff_);
+  //shadow_set_->GetRedirectEntrisMap()->PrintBrief();
+  //std::cout <<"install shadow cache done" << std::endl;
   mutex_->Lock();
   auto cf_id = blob_gc_->column_family_handle()->GetID();
   for (auto blobfile : drop_keys) {
