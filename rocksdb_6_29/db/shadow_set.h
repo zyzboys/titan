@@ -48,6 +48,13 @@ class RedirectMap {
       }
       return 0;
     }
+    
+    void GetRedirectMapCopy(std::unordered_map<uint64_t, uint64_t>& redirect_map_copy) {
+      MutexLock l(&redirect_mutex_);
+      for (auto& entry : redirect_map_) {
+        redirect_map_copy[entry.first] = entry.second;
+      }
+    }
 
     void PrintBrief() {
       MutexLock l(&redirect_mutex_);

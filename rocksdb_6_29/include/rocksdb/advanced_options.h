@@ -55,7 +55,7 @@ enum CompactionPri : char {
   // amplification.
   kMinOverlappingRatio = 0x3,
   // by redirect entries
-  // kByRedirectEnries = 0x4,
+  //kByRedirectEnries = 0x4,
 };
 
 struct CompactionOptionsFIFO {

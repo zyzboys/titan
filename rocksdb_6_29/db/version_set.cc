@@ -3430,13 +3430,15 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     // don't need this
     return;
   }
-  // if (GetShadowSet() == nullptr) {
-  //   std::cout<<"version_storage_info.cc: GetShadowSet() == nullptr"<<std::endl;
-  // } else {
-  //   GetShadowSet()->GetRedirectEntrisMap()->PrintBrief();
-  //   std::cout<<std::endl;
-  // }
+
   // No need to sort the highest level because it is never compacted.
+  ShadowSet* shadow_set = GetShadowSet();
+  std::unordered_map<uint64_t, uint64_t> redirect_map_copy;
+  if (shadow_set != nullptr) {
+    shadow_set->GetRedirectEntrisMap()->GetRedirectMapCopy(redirect_map_copy);
+  }
+  double redirect_threshold = 0.2; // 不知道多少合适
+
   for (int level = 0; level < num_levels() - 1; level++) {
     const std::vector<FileMetaData*>& files = files_[level];
     auto& files_by_compaction_pri = files_by_compaction_pri_[level];
@@ -3444,10 +3446,28 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
 
     // populate a temp vector for sorting based on size
     std::vector<Fsize> temp(files.size());
+    std::vector<std::pair<size_t, double>> temp_redirect;
     for (size_t i = 0; i < files.size(); i++) {
       temp[i].index = i;
       temp[i].file = files[i];
+      // if shadow_set is not nullptr, we need to check if the file is beyond the redirect threshold
+      if (shadow_set != nullptr) {
+        size_t index = i;
+        double redirect_score = 0.0;
+        auto it = redirect_map_copy.find(files[i]->fd.GetNumber());
+        if (it != redirect_map_copy.end()) {
+          redirect_score = (double)it->second / files[i]->num_entries;
+        }
+        if (redirect_score >= redirect_threshold) {
+          temp_redirect.push_back(std::make_pair(index, redirect_score));
+        }
+      }    
     }
+
+    std::sort(temp_redirect.begin(), temp_redirect.end(),
+              [](const std::pair<uint64_t, double>& f1, const std::pair<uint64_t, double>& f2) -> bool {
+                return f1.second > f2.second;
+              });
 
     // sort the top number_of_files_to_sort_ based on file size
     size_t num = VersionStorageInfo::kNumberFilesToSort;
@@ -3484,9 +3504,36 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     assert(temp.size() == files.size());
 
     // initialize files_by_compaction_pri_
+    // 需要根据redirect_socre 重新排序
+    //std::vector<int> files_by_compaction_pri_ori;
+    std::unordered_set<size_t> temp_redirect_set;
+    for (size_t i = 0; i < temp_redirect.size(); i++) {
+      files_by_compaction_pri.push_back(static_cast<int>(temp_redirect[i].first));
+      temp_redirect_set.insert(temp_redirect[i].first);
+    } 
     for (size_t i = 0; i < temp.size(); i++) {
-      files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+      //排除那些已经添加的
+      if(temp_redirect_set.find(temp[i].index) == temp_redirect_set.end()) {
+        files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+      }
+      //files_by_compaction_pri_ori.push_back(static_cast<int>(temp[i].index));
     }
+
+    // std::cout<<"before: "<<std::endl;
+    // for (size_t i = 0; i < files_by_compaction_pri_ori.size(); i++) {
+    //   std::cout<<files_by_compaction_pri_ori[i]<<" ";
+    // }
+    // std::cout<<std::endl;
+
+    // std::cout<<"add redirect policy: "<<std::endl;
+    // for (size_t i = 0; i < files_by_compaction_pri.size(); i++) {
+    //   std::cout<<files_by_compaction_pri[i]<<" ";
+    // }
+    // std::cout<<std::endl;
+
+    // for (size_t i = 0; i < temp.size(); i++) {
+    //   files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+    // }
     next_file_to_compact_by_size_[level] = 0;
     assert(files_[level].size() == files_by_compaction_pri_[level].size());
   }
