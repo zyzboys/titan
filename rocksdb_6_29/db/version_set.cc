@@ -3422,6 +3422,7 @@ void SortFileByOverlappingRatio(
 }
 }  // namespace
 
+// peiqi: 根据redirect score计算compaction pri
 void VersionStorageInfo::UpdateFilesByCompactionPri(
     const ImmutableOptions& ioptions, const MutableCFOptions& options) {
   if (compaction_style_ == kCompactionStyleNone ||
@@ -3435,7 +3436,7 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
   ShadowSet* shadow_set = GetShadowSet();
   std::unordered_map<uint64_t, uint64_t> redirect_map_copy;
   if (shadow_set != nullptr) {
-    shadow_set->GetRedirectEntrisMap()->GetRedirectMapCopy(redirect_map_copy);
+    shadow_set->GetRedirectEntriesMap()->GetRedirectMapCopy(redirect_map_copy);
   }
   double redirect_threshold = 0.2; // 不知道多少合适
 

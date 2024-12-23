@@ -412,6 +412,8 @@ class DBImpl : public DB {
 
   ShadowSet* GetShadowSet();
 
+  void DeleteObsoleteFilesInRedirectMap(std::unordered_set<uint64_t>& files_to_del);
+
 #ifndef ROCKSDB_LITE
   using DB::ResetStats;
   virtual Status ResetStats() override;

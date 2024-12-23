@@ -497,6 +497,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   bool own_files = OwnTablesAndLogs();
   std::unordered_set<uint64_t> files_to_del;
+  std::unordered_set<uint64_t> files_to_del_in_redirect_map;
   for (const auto& candidate_file : candidate_files) {
     const std::string& to_delete = candidate_file.file_name;
     uint64_t number;
@@ -527,6 +528,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
         if (!keep) {
           files_to_del.insert(number);
         }
+        files_to_del_in_redirect_map.insert(number);
         break;
       case kBlobFile:
         keep = number >= state.min_pending_output ||
@@ -611,6 +613,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       DeleteObsoleteFileImpl(state.job_id, fname, dir_to_sync, type, number);
     }
   }
+
+  DeleteObsoleteFilesInRedirectMap(files_to_del_in_redirect_map);
 
   {
     // After purging obsolete files, remove them from files_grabbed_for_purge_.

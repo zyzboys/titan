@@ -840,8 +840,8 @@ Status BlobGCJob::InstallOutputShadowCache() {
   TITAN_LOG_INFO(db_options_.info_log, "in InstallOutputShadowCache()");
   TITAN_LOG_INFO(db_options_.info_log, "add cache count: %ld\n", cache_addition_.size());
   shadow_set_->GetShadowCache()->AddMulti(cache_addition_, &drop_keys);
-  shadow_set_->GetRedirectEntrisMap()->AddMulti(redirect_entries_map_diff_);
-  //shadow_set_->GetRedirectEntrisMap()->PrintBrief();
+  shadow_set_->GetRedirectEntriesMap()->AddMulti(redirect_entries_map_diff_);
+  //shadow_set_->GetRedirectEntriesMap()->PrintBrief();
   //std::cout <<"install shadow cache done" << std::endl;
   mutex_->Lock();
   auto cf_id = blob_gc_->column_family_handle()->GetID();

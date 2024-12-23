@@ -4044,6 +4044,13 @@ ShadowSet* DBImpl::GetShadowSet() {
   return shadow_set_.get();
 }
 
+void DBImpl::DeleteObsoleteFilesInRedirectMap(std::unordered_set<uint64_t>& files_to_del) {
+  ShadowSet* shadow_set = GetShadowSet();
+  if (shadow_set != nullptr) {
+    this->GetShadowSet()->GetRedirectEntriesMap()->DeleteMulti(files_to_del);
+  }
+}
+
 
 Status DBImpl::GetDbIdentityFromIdentityFile(std::string* identity) const {
   std::string idfilename = IdentityFileName(dbname_);

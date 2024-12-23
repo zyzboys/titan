@@ -40,6 +40,16 @@ class RedirectMap {
       }
     }
 
+    void DeleteMulti(std::unordered_set<uint64_t>& to_delete) {
+      MutexLock l(&redirect_mutex_);
+      for (auto& one_delete : to_delete) {
+        if(redirect_map_.find(one_delete) != redirect_map_.end()) {
+          redirect_map_.erase(one_delete);
+          std::cout<<"sst number: "<<one_delete<<" is deleted from redirect map"<<std::endl;
+        }
+      }
+    }
+
     uint64_t GetRedirectNum(uint64_t file_number) {
       MutexLock l(&redirect_mutex_);
       auto it = redirect_map_.find(file_number);
@@ -134,7 +144,7 @@ class ShadowCache {
       }
     }
 
-    void DeleteMuti(std::unordered_map<std::string, std::string>& cache_deletion) {
+    void DeleteMulti(std::unordered_map<std::string, std::string>& cache_deletion) {
       MutexLock l(&cache_mutex_);
       //fprintf(stderr, "Delete cache begin, cache size: %ld, deletion size: %ld\n", cache_.size(), cache_deletion.size());
       for (auto& cache : cache_deletion) {
@@ -249,7 +259,7 @@ public:
   // void DeleteCacheMuti(std::unordered_map<std::string, std::string>& cache_deletion);
 
   ShadowCache* GetShadowCache() { return &shadow_cache_; }
-  RedirectMap* GetRedirectEntrisMap() { return &redirect_map_; }
+  RedirectMap* GetRedirectEntriesMap() { return &redirect_map_; }
 
   class FileLocation {
    public:

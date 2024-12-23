@@ -1322,7 +1322,7 @@ void TitanDBImpl::OnCompactionCompleted(
   update_diff(compaction_job_info.input_files, false /*to_add*/);
   update_diff(compaction_job_info.output_files, true /*to_add*/);
 
-  shadow_set_->GetShadowCache()->DeleteMuti(*(compaction_job_info.stats.cache_deletion));
+  shadow_set_->GetShadowCache()->DeleteMulti(*(compaction_job_info.stats.cache_deletion));
   TITAN_LOG_INFO(db_options_.info_log, "delete cache count: %ld\n", (compaction_job_info.stats.cache_deletion)->size());
 
   {
