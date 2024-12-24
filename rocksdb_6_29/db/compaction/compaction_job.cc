@@ -1456,7 +1456,10 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     std::string cache_value;
     compaction_check_key++;
     uint64_t father_number = 0;
-    if (c_iter->ikey().type == kTypeBlobIndex) {
+    // std::unordered_map<std::string, std::pair<uint64_t, std::string>> shadow_cache_copy;
+    // shadow_set_->GetShadowCache()->GetShadowCacheCopy(shadow_cache_copy);
+    //如果不是L0->Lbase的compaction，且命中redirect table
+    if (sub_compact->compaction->start_level() != 0 && c_iter->ikey().type == kTypeBlobIndex) {
       if (shadow_set_->GetShadowCache()->KeyExist(c_iter->user_key().ToString(), &father_number, cache_value)) {
         key_in_cache++;
         TitanBlobIndex lsm_index;

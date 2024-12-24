@@ -23,7 +23,7 @@ extern const std::vector<std::string> TitanTickersName = {
     "titandb.num.seek",
     "titandb.num.next",
     "titandb.num.prev",
-    "titandb.num.get.miss"
+    "titandb.num.get.miss",
     "titandb.blob.file.num.keys.written",
     "titandb.blob.file.num.keys.read",
     "titandb.blob.file.bytes.written",
