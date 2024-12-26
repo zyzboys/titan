@@ -15,6 +15,18 @@
 namespace rocksdb {
 namespace titandb {
 
+class PartitionManager {
+  public:
+    PartitionManager() {}
+    ~PartitionManager() {}
+  private:
+    mutable port::Mutex mutex_;
+    std::unordered_set<std::string> key_buffer_;
+    std::vector<std::string> pivot_;
+
+
+};
+
 // Provides methods to access the blob storage for a specific
 // column family.
 class BlobStorage {
@@ -169,6 +181,7 @@ class BlobStorage {
   // Only BlobStorage OWNS BlobFileMeta
   // file_number -> file_meta
   std::unordered_map<uint64_t, std::shared_ptr<BlobFileMeta>> files_;
+  PartitionManager partition_manager_;
   std::vector<int> levels_file_count_;
 
   class InternalComparator {

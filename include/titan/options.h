@@ -171,6 +171,11 @@ struct TitanCFOptions : public ColumnFamilyOptions {
   // If set true, Titan will first check bitset when GC
   bool drop_key_bitset{false};
 
+  // If set true, Titan will partition blob files by keys
+  bool blobfile_partition{false};
+
+  int partition_num{256};
+
   // The desirable shadow size. This is not a hard limit but a wish.
   //
   // Default: 4MB

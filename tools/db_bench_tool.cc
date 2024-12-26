@@ -829,6 +829,8 @@ DEFINE_uint64(titan_shadow_target_size, 4 * 1024 * 1024,
 
 DEFINE_bool(titan_shadow_cache, false, "Enable shadow cache in Titan.");
 
+DEFINE_bool(titan_blobfile_partition, false, "Enable blobfile partition in Titan.");
+
 #endif  // ROCKSDB_LITE
 
 DEFINE_bool(report_bg_io_stats, false,
@@ -3989,6 +3991,7 @@ class Benchmark {
     opts->rewrite_shadow = FLAGS_titan_rewrite_shadow;
     opts->shadow_cache = FLAGS_titan_shadow_cache;
     opts->drop_key_bitset = FLAGS_titan_drop_key_bitset;
+    opts->blobfile_partition = FLAGS_titan_blobfile_partition;
     opts->shadow_target_size = FLAGS_titan_shadow_target_size;
     //opts->min_gc_batch_size = 128 << 20;
     opts->blob_file_compression = FLAGS_compression_type_e;

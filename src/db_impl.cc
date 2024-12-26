@@ -582,6 +582,7 @@ Status TitanDBImpl::Put(const rocksdb::WriteOptions& options,
 Status TitanDBImpl::Write(const rocksdb::WriteOptions& options,
                           rocksdb::WriteBatch* updates,
                           PostWriteCallback* callback) {
+  //std::cout<<"TitanDBImpl::Write"<<std::endl;
   return HasBGError() ? GetBGError() : db_->Write(options, updates, callback);
 }
 
