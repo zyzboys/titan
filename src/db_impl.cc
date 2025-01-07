@@ -679,11 +679,11 @@ Status TitanDBImpl::GetImpl(const ReadOptions& options,
         "Column family id: " + std::to_string(handle->GetID()) + " not Found.");
   }
   if (s.IsCorruption()) {
-    TITAN_LOG_ERROR(db_options_.info_log,
-                    "Key:%s Snapshot:%" PRIu64 " GetBlobFile err:%s\n",
-                    key.ToString(true).c_str(),
-                    options.snapshot->GetSequenceNumber(),
-                    s.ToString().c_str());
+    // TITAN_LOG_ERROR(db_options_.info_log,
+    //                 "Key:%s Snapshot:%" PRIu64 " GetBlobFile err:%s\n",
+    //                 key.ToString(true).c_str(),
+    //                 options.snapshot->GetSequenceNumber(),
+    //                 s.ToString().c_str());
   }
   if (s.ok()) {
     value->Reset();

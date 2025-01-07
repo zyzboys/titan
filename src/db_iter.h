@@ -151,11 +151,11 @@ class TitanDBIterator : public Iterator {
       std::unique_ptr<BlobFilePrefetcher> prefetcher;
       status_ = storage_->NewPrefetcher(index.file_number, &prefetcher);
       if (!status_.ok()) {
-        TITAN_LOG_ERROR(
-            info_log_,
-            "Titan iterator: failed to create prefetcher for blob file %" PRIu64
-            ": %s",
-            index.file_number, status_.ToString().c_str());
+        // TITAN_LOG_ERROR(
+        //     info_log_,
+        //     "Titan iterator: failed to create prefetcher for blob file %" PRIu64
+        //     ": %s",
+        //     index.file_number, status_.ToString().c_str());
         return;
       }
       it = files_.emplace(index.file_number, std::move(prefetcher)).first;

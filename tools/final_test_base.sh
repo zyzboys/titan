@@ -5,8 +5,8 @@ thread_count=1
 echo "start final exp"
 for val_size in 1024
 do
-    entry_count=5000000
-    read_count=500000
+    entry_count=100000000
+    read_count=10000000
     echo "entry count: $entry_count"
     echo "read count: $read_count"
 
