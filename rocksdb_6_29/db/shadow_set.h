@@ -147,6 +147,11 @@ class ShadowCache {
       //fprintf(stderr, "Add cache done, cache size: %ld\n", cache_.size());
     }
 
+    uint64_t GetCacheSize() {
+      //MutexLock l(&cache_mutex_);
+      return cache_.size();
+    }
+
     void AddMulti(std::unordered_map<std::string, std::pair<uint64_t, std::string>>& cache_addition) {
       //MutexLock l(&cache_mutex_);
       for (auto& cache : cache_addition) {

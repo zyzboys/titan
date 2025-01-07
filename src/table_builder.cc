@@ -24,6 +24,7 @@ TitanTableBuilder::NewCachedRecordContext(const ParsedInternalKey& ikey,
   return ctx;
 }
 
+// peiqi: maybe add partition logic here
 void TitanTableBuilder::Add(const Slice& key, const Slice& value) {
   if (!ok()) return;
 
