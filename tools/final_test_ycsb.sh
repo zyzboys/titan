@@ -5,7 +5,7 @@ thread_count=1
 echo "start ycsb exp"
 for wkld in ycsbwklda ycsbwkldb ycsbwkldc ycsbwkldd ycsbwklde ycsbwkldf
 do
-    entry_count=5000000
+    entry_count=50000000
     val_size=1024
     echo "entry count: $entry_count"
     ehco "value size: $val_size"
