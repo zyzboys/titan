@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-rm -rf /users/peiqi714/test/log/*
+rm -rf /users/peiqi714/test/base_log/*
 rm -rf /users/peiqi714/test/db/*
 thread_count=1
 echo "start final exp"
@@ -14,10 +14,10 @@ do
     rm -rf /users/peiqi714/test/db/*
     ../rocksdb_6_29/build/db_bench --benchmarks=fillrandom,stats,overwrite,stats,readrandom,stats,seekrandom,stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
                     --statistics=true  --num=$entry_count --reads=$read_count --seek_nexts=10 --zipfian=1 --zipf_const=0.9 \
-                    --key_size=16 --value_size=$val_size --compression_type=none --compression_ratio=1 > /users/peiqi714/test/log/rocksdb_base
-    echo "rocksdb_base space:" >> /users/peiqi714/test/log/space_util_base
-    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/log/space_util_base
-    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/log/rocksdb_base_LOG
+                    --key_size=16 --value_size=$val_size --compression_type=none --compression_ratio=1 > /users/peiqi714/test/base_log/rocksdb_base
+    echo "rocksdb_base space:" >> /users/peiqi714/test/base_log/space_util_base
+    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/base_log/space_util_base
+    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/base_log/rocksdb_base_LOG
 
     # blobdb
     rm -rf /users/peiqi714/test/db/*
@@ -26,10 +26,10 @@ do
                     --key_size=16 --value_size=$val_size --compression_type=none --compression_ratio=1 \
                     --enable_blob_files=true --enable_blob_garbage_collection=true \
                     --blob_garbage_collection_force_threshold=0.3 --target_file_size_base=4194304 \
-                    --max_bytes_for_level_base=16777216 --blob_file_size=67108864 > /users/peiqi714/test/log/blobdb_base
-    echo "blobdb_base space:" >> /users/peiqi714/test/log/space_util_base
-    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/log/space_util_base
-    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/log/blobdb_base_LOG
+                    --max_bytes_for_level_base=16777216 --blob_file_size=67108864 > /users/peiqi714/test/base_log/blobdb_base
+    echo "blobdb_base space:" >> /users/peiqi714/test/base_log/space_util_base
+    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/base_log/space_util_base
+    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/base_log/blobdb_base_LOG
 
 
     # diffkv
@@ -41,10 +41,10 @@ do
                     --titan_blob_file_discardable_ratio=0.3 --target_file_size_base=4194304 \
                     --max_bytes_for_level_base=16777216 --titan_blob_file_target_size=67108864 \
                     --titan_merge_small_file_threshold=2097152 --titan_min_gc_batch_size=134217728 \
-                    --titan_max_gc_batch_size=268435456 > /users/peiqi714/test/log/diffkv_base
-    echo "diffkv_base space:" >> /users/peiqi714/test/log/space_util_base
-    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/log/space_util_base
-    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/log/diffkv_base_LOG
+                    --titan_max_gc_batch_size=268435456 > /users/peiqi714/test/base_log/diffkv_base
+    echo "diffkv_base space:" >> /users/peiqi714/test/base_log/space_util_base
+    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/base_log/space_util_base
+    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/base_log/diffkv_base_LOG
 
     # titan
     rm -rf /users/peiqi714/test/db/*
@@ -54,10 +54,10 @@ do
                     --titan_blob_file_discardable_ratio=0.3 --target_file_size_base=4194304 \
                     --max_bytes_for_level_base=16777216 --titan_blob_file_target_size=67108864 \
                     --titan_merge_small_file_threshold=2097152 --titan_min_gc_batch_size=134217728 \
-                    --titan_max_gc_batch_size=268435456 > /users/peiqi714/test/log/titan_base
-    echo "titan_base space:" >> /users/peiqi714/test/log/space_util_base
-    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/log/space_util_base
-    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/log/titan_base_LOG
+                    --titan_max_gc_batch_size=268435456 > /users/peiqi714/test/base_log/titan_base
+    echo "titan_base space:" >> /users/peiqi714/test/base_log/space_util_base
+    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/base_log/space_util_base
+    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/base_log/titan_base_LOG
 
     # shadow
     rm -rf /users/peiqi714/test/db/*
@@ -68,10 +68,10 @@ do
                     --titan_blob_file_discardable_ratio=0.3 --target_file_size_base=4194304 \
                     --max_bytes_for_level_base=16777216 --titan_blob_file_target_size=67108864 \
                     --titan_merge_small_file_threshold=2097152 --titan_min_gc_batch_size=134217728 \
-                    --titan_max_gc_batch_size=268435456 > /users/peiqi714/test/log/shadow_base
-    echo "shadow_base space:" >> /users/peiqi714/test/log/space_util_base
-    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/log/space_util_base
-    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/log/shadow_base_LOG
+                    --titan_max_gc_batch_size=268435456 > /users/peiqi714/test/base_log/shadow_base
+    echo "shadow_base space:" >> /users/peiqi714/test/base_log/space_util_base
+    du -k --max-depth=0 /users/peiqi714/test/db/db >> /users/peiqi714/test/base_log/space_util_base
+    cp -f /users/peiqi714/test/db/db/LOG /users/peiqi714/test/base_log/shadow_base_LOG
 
 done
 echo "end final exp"
