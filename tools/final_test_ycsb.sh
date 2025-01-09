@@ -5,11 +5,10 @@ thread_count=1
 echo "start ycsb exp"
 for wkld in ycsbwklda ycsbwkldb ycsbwkldc ycsbwkldd ycsbwklde ycsbwkldf
 do
-    entry_count=100000000
-    read_count=10000000
+    entry_count=5000000
     val_size=1024
     echo "entry count: $entry_count"
-    echo "read count: $read_count"
+    ehco "value size: $val_size"
 
     # rocksdb
     rm -rf /users/peiqi714/test/db/*
