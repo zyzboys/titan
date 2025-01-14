@@ -2917,6 +2917,9 @@ class Benchmark {
       } else if (name == "ycsbfilldb") {
         fresh_db = true;
         method = &Benchmark::YCSBFillDB;
+      } else if (name == "ycsbupdate") {
+        FLAGS_use_existing_db = true;
+        method = &Benchmark::YCSBUpdate;
       } else if (name == "fill100K") {
         fresh_db = true;
         num_ /= 1000;
@@ -6227,6 +6230,50 @@ class Benchmark {
     thread->stats.AddBytes(bytes);
   }
 
+  void YCSBUpdate(ThreadState* thread) {
+    //RandomGenerator gen;
+    ReadOptions options;
+    std::string value;
+    int found = 0;
+
+    int64_t bytes = 0;
+    int writes_done = 0;
+    std::vector<uint64_t> *keys = threadKeys_[thread->tid];
+    int total = keys->size();
+    int warm_up_num = total * FLAGS_ycsb_warmup_ratio;
+    fprintf(stderr, "start warmup: %d entries\n", warm_up_num);
+    fprintf(stderr, "end warmup: %d entries\n", warm_up_num);
+    // the number of iterations is the larger of read_ or write_
+    if (FLAGS_ycsb_warmup_ratio != 0) {
+      thread->stats.Start(thread->tid);//warm up之后重新计时
+    }
+    for (int i = warm_up_num; i < total; i++) {
+      int k = keys->at(i);
+      std::unique_ptr<const char[]> key_guard;
+      Slice key = AllocateKey(&key_guard);
+      GenerateKeyFromInt(k, &key);
+      bytes += value_size + key.size();
+
+      char val_char[1024] = {0};
+      sprintf(val_char, "%d", k);        
+      Slice val = Slice(val_char, value_size);
+
+      Status s = db_.db->Put(write_options_, key, val);
+      if (!s.ok()) {
+        fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+        exit(1);
+      } else {
+        writes_done++;
+        thread->stats.FinishedOps(nullptr, db_.db, 1, kWrite);
+      }
+        
+    }
+    char msg[100];
+    snprintf(msg, sizeof(msg), "(writes: %d)", writes_done);
+    thread->stats.AddMessage(msg);
+    thread->stats.AddBytes(bytes);
+  }
+
   // Workload A: Update heavy workload
   // This workload has a mix of 50/50 reads and writes.
   // An application example is a session store recording recent actions.
@@ -6631,9 +6678,11 @@ class Benchmark {
         for (j = 0; j < scan_size && iter->Valid(); j++) {       
           iter->Next();
         }
+        
         if (j == scan_size) {
           found++;
         }
+        delete iter;
         thread->stats.FinishedOps(nullptr, db_.db, 1, kSeek);
         //Status s = db->Scan(options, key, scan_size, &results);
         // if (!s.ok() && !s.IsNotFound()) {

@@ -3,16 +3,16 @@ rm -rf /users/peiqi714/test/ycsb_log/*
 rm -rf /users/peiqi714/test/db/*
 thread_count=1
 echo "start ycsb exp"
-for wkld in ycsbwklda ycsbwkldb ycsbwkldc ycsbwkldd ycsbwklde ycsbwkldf
+for wkld in ycsbwklde
 do
-    entry_count=50000000
+    entry_count=10000000
     val_size=1024
     echo "entry count: $entry_count"
-    ehco "value size: $val_size"
+    echo "value size: $val_size"
 
     # rocksdb
     rm -rf /users/peiqi714/test/db/*
-    ../rocksdb_6_29/build/db_bench --benchmarks=ycsbfilldb,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
+    ../rocksdb_6_29/build/db_bench --benchmarks=ycsbfilldb,stats,ycsbupdate,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
                     --statistics=true  --num=$entry_count --ycsb_num=$entry_count \
                     --key_size=16 --value_size=$val_size --compression_type=none --compression_ratio=1 > /users/peiqi714/test/ycsb_log/rocksdb_${wkld}
     echo "rocksdb_${wkld} space:" >> /users/peiqi714/test/ycsb_log/space_util_ycsb
@@ -21,7 +21,7 @@ do
 
     # blobdb
     rm -rf /users/peiqi714/test/db/*
-    ../rocksdb_6_29/build/db_bench --benchmarks=ycsbfilldb,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
+    ../rocksdb_6_29/build/db_bench --benchmarks=ycsbfilldb,stats,ycsbupdate,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
                     --statistics=true  --num=$entry_count --ycsb_num=$entry_count \
                     --key_size=16 --value_size=$val_size --compression_type=none --compression_ratio=1 \
                     --enable_blob_files=true --enable_blob_garbage_collection=true \
@@ -34,7 +34,7 @@ do
 
     # diffkv
     rm -rf /users/peiqi714/test/db/*
-    ./titandb_bench --benchmarks=ycsbfilldb,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
+    ./titandb_bench --benchmarks=ycsbfilldb,stats,ycsbupdate,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
                     --statistics=true  --num=$entry_count --ycsb_num=$entry_count \
                     --key_size=16 --value_size=$val_size --compression_type=none \
                     --level_compaction_dynamic_level_bytes=true --titan_level_merge=true --titan_disable_background_gc=true \
@@ -48,7 +48,7 @@ do
 
     # titan
     rm -rf /users/peiqi714/test/db/*
-    ./titandb_bench --benchmarks=ycsbfilldb,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
+    ./titandb_bench --benchmarks=ycsbfilldb,stats,ycsbupdate,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
                     --statistics=true  --num=$entry_count --ycsb_num=$entry_count \
                     --key_size=16 --value_size=$val_size --compression_type=none \
                     --titan_blob_file_discardable_ratio=0.3 --target_file_size_base=4194304 \
@@ -61,7 +61,7 @@ do
 
     # shadow
     rm -rf /users/peiqi714/test/db/*
-    ./titandb_bench --benchmarks=ycsbfilldb,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
+    ./titandb_bench --benchmarks=ycsbfilldb,stats,ycsbupdate,stats,${wkld},stats  --db=/users/peiqi714/test/db/db --threads=$thread_count \
                     --statistics=true  --num=$entry_count --ycsb_num=$entry_count \
                     --key_size=16 --value_size=$val_size --compression_type=none \
                     --titan_drop_key_bitset=1 --titan_shadow_cache=1 \
