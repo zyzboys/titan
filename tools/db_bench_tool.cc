@@ -6252,11 +6252,11 @@ class Benchmark {
       std::unique_ptr<const char[]> key_guard;
       Slice key = AllocateKey(&key_guard);
       GenerateKeyFromInt(k, &key);
-      bytes += value_size + key.size();
+      bytes += value_size_ + key.size();
 
       char val_char[1024] = {0};
       sprintf(val_char, "%d", k);        
-      Slice val = Slice(val_char, value_size);
+      Slice val = Slice(val_char, value_size_);
 
       Status s = db_.db->Put(write_options_, key, val);
       if (!s.ok()) {
