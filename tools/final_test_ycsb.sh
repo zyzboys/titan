@@ -3,9 +3,9 @@ rm -rf /users/peiqi714/test/ycsb_log/*
 rm -rf /users/peiqi714/test/db/*
 thread_count=1
 echo "start ycsb exp"
-for wkld in ycsbwklde
+for wkld in ycsbwklde ycsbwklda ycsbwkldb ycsbwkldc ycsbwkldd ycsbwkldf
 do
-    entry_count=10000000
+    entry_count=50000000
     val_size=1024
     echo "entry count: $entry_count"
     echo "value size: $val_size"
