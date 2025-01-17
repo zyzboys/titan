@@ -3,7 +3,7 @@ rm -rf /users/peiqi714/test/ycsb_log/*
 rm -rf /users/peiqi714/test/db/*
 thread_count=1
 echo "start ycsb exp"
-for wkld in ycsbwklde ycsbwklda ycsbwkldb ycsbwkldc ycsbwkldd ycsbwkldf
+for wkld in ycsbwkldd ycsbwkldf ycsbwklde ycsbwklda ycsbwkldb ycsbwkldc
 do
     entry_count=50000000
     val_size=1024
