@@ -251,9 +251,13 @@ void BlobStorage::ComputeGCScore() {
       // more invalid data
       gcs.score = cf_options_.blob_file_discardable_ratio;
     } else {
-      //gcs.score = file.second->GetDiscardableRatio();
-      //use bitset to calculate the score
-      gcs.score = 1.0 - ((double)(file.second->GetLiveDataSize()) / file.second->GetLiveDataBitsetSize());
+      if (cf_options_.drop_key_bitset == false) {
+        //titan: use discardable ratio to calculate the score
+        gcs.score = file.second->GetDiscardableRatio();
+      } else {
+        //redkv: use bitset to calculate the score
+        gcs.score = 1.0 - ((double)(file.second->GetLiveDataSize()) / file.second->GetLiveDataBitsetSize());
+      }
       //fprintf(stderr, "live data size: %ld, live data bitset size: %ld, live data ratio:%lf, gc score: %lf\n", file.second->GetLiveDataSize(), file.second->GetLiveDataBitsetSize(), ((double)(file.second->GetLiveDataSize()) / file.second->GetLiveDataBitsetSize()), gcs.score);
     }
   }
